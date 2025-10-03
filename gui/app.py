@@ -5,6 +5,7 @@ import math
 import tkinter as tk
 from tkinter import ttk
 from typing import Optional, Callable
+import os
 
 # Optional plotting deps (Matplotlib preferred, with Tk fallback)
 try:
@@ -26,6 +27,13 @@ except Exception:
     matplotlib = None
     Figure = None
     FigureCanvasTkAgg = None
+
+# Sound effects (optional)
+try:
+    import pygame
+    PYGAME_AVAILABLE = True
+except ImportError:
+    PYGAME_AVAILABLE = False
 
 from eventbus import EventBus
 from hardware.base import HardwareController
@@ -84,9 +92,6 @@ class ValueSlider(ttk.Frame):
         # Create slider with value display attached
         self._create_slider_with_display(label)
         
-        # Range labels
-        self._create_range_labels()
-        
         # Bind variable changes
         self.var.trace_add("write", self._on_value_change)
 
@@ -125,17 +130,6 @@ class ValueSlider(ttk.Frame):
         self.range_end = ttk.Label(slider_row, text=f"{self.to} {self.unit}", 
                                  style="Range.TLabel", width=5)
         self.range_end.pack(side="left", padx=(5, 0))
-
-    def _create_range_labels(self):
-        # Frequency range clarification for 300-3000Hz sliders
-        if not self.is_percent and self.from_ == 300 and self.to == 3000:
-            range_clarification = ttk.Frame(self)
-            range_clarification.pack(fill="x", pady=(1, 0))
-            ttk.Label(range_clarification, 
-                     text="300 Hz (Low) to 3000 Hz (High)", 
-                     style="Range.TLabel", 
-                     foreground="#2E86AB",
-                     font=("Segoe UI", 8)).pack(anchor="center")
 
     def _on_slide(self, value):
         # Update value display in real-time while sliding
@@ -176,21 +170,70 @@ class ValueSlider(ttk.Frame):
 
 class PresetManager:
     def __init__(self):
+        # Simplified to only 3 user-editable presets
         self.presets = {
-            "Voice": {"cf": 1000, "bw": 500},
-            "Bass": {"cf": 400, "bw": 300},
-            "Midrange": {"cf": 1500, "bw": 800},
-            "Treble": {"cf": 2500, "bw": 600},
-            "Wide Voice": {"cf": 1000, "bw": 1200},
-            "Narrow Bass": {"cf": 400, "bw": 200},
-            "Custom 1": {"cf": 750, "bw": 400}
+            "Custom 1": {"cf": 1000, "bw": 500},
+            "Custom 2": {"cf": 1500, "bw": 800},
+            "Custom 3": {"cf": 2000, "bw": 600}
         }
+
+
+class SoundManager:
+    def __init__(self):
+        self.enabled = PYGAME_AVAILABLE
+        if self.enabled:
+            try:
+                pygame.mixer.init()
+                # Create a simple beep sound (you can replace with actual sound files)
+                self._create_beep_sounds()
+            except Exception:
+                self.enabled = False
+    
+    def _create_beep_sounds(self):
+        """Create simple beep sounds programmatically"""
+        try:
+            import numpy as np
+            
+            # Click sound for buttons
+            sample_rate = 22050
+            duration = 0.1
+            t = np.linspace(0, duration, int(sample_rate * duration))
+            click_wave = 0.3 * np.sin(2 * np.pi * 800 * t) * np.exp(-5 * t)
+            click_wave = np.int16(click_wave * 32767)
+            self.click_sound = pygame.sndarray.make_sound(click_wave)
+            
+            # Sweep sound for preset changes
+            sweep_duration = 0.3
+            t_sweep = np.linspace(0, sweep_duration, int(sample_rate * sweep_duration))
+            sweep_wave = 0.2 * np.sin(2 * np.pi * (400 + 800 * t_sweep / sweep_duration) * t_sweep)
+            sweep_wave = np.int16(sweep_wave * 32767)
+            self.sweep_sound = pygame.sndarray.make_sound(sweep_wave)
+            
+        except Exception:
+            self.enabled = False
+    
+    def play_click(self):
+        if self.enabled:
+            try:
+                self.click_sound.play()
+            except Exception:
+                pass
+    
+    def play_sweep(self):
+        if self.enabled:
+            try:
+                self.sweep_sound.play()
+            except Exception:
+                pass
 
 
 class DSPGui(tk.Tk):
     def __init__(self, hw: HardwareController, bus: EventBus):
         super().__init__()
         self.hw, self.bus = hw, bus
+
+        # ---------------- Sound Manager ----------------
+        self.sound_manager = SoundManager()
 
         # ---------------- Window Configuration ----------------
         self.title("DSP Audio Filter Control")
@@ -226,17 +269,19 @@ class DSPGui(tk.Tk):
         # Comfortable styles for 50/50 layout
         style.configure("Big.TLabel", font=("Segoe UI", font_size))
         style.configure("Compact.TLabel", font=("Segoe UI", font_size-1))
-        style.configure("Range.TLabel", font=("Segoe UI", font_size-1), foreground="#666666")  # Slightly larger
+        style.configure("Range.TLabel", font=("Segoe UI", font_size-1), foreground="#666666")
         style.configure("ValueDisplay.TLabel", font=("Segoe UI", font_size, "bold"), 
                        background="#2c2c2c", foreground="white", relief="raised", 
-                       borderwidth=1, padding=(4, 2))  # Slightly larger padding
+                       borderwidth=1, padding=(4, 2))
         
         if self._is_touchscreen_mode():
             style.configure("TButton", padding=(10, 6))
             style.configure("Compact.TButton", padding=(8, 4))
+            style.configure("Preset.TButton", padding=(6, 4), font=("Segoe UI", 9))
         else:
             style.configure("TButton", padding=(8, 5))
-            style.configure("Compact.TButton", padding=(6, 4))  # More comfortable buttons
+            style.configure("Compact.TButton", padding=(6, 4))
+            style.configure("Preset.TButton", padding=(5, 3), font=("Segoe UI", 9))
 
         # ---------------- Debounce handles ----------------
         self._cf_after_id: Optional[str] = None
@@ -308,28 +353,47 @@ class DSPGui(tk.Tk):
         self.vol_slider.pack(fill="x")
         self.vol_var = self.vol_slider.var
 
-        # Presets section
-        presets_label = ttk.Label(controls_frame, text="Presets:", style="Big.TLabel")
-        presets_label.pack(anchor="w", pady=(15, 8))
+        # ---------------- NEW SIMPLIFIED PRESETS SECTION ----------------
+        presets_label = ttk.Label(controls_frame, text="PRESETS", style="Big.TLabel")
+        presets_label.pack(anchor="w", pady=(20, 8))
         
-        # Preset buttons in a comfortable layout
+        # Preset bank with 3 user-editable presets in a compact layout
         presets_frame = ttk.Frame(controls_frame)
         presets_frame.pack(fill="x", pady=(0, 8))
         
+        # Create preset slots in a vertical layout
+        self.preset_slots = {}
         preset_names = list(self.preset_manager.presets.keys())
-        if self._is_touchscreen_mode():
-            preset_names = preset_names[:4]  # Show first 4 on touchscreen
         
-        # Create comfortable button layout
-        for i, name in enumerate(preset_names):
-            btn = ttk.Button(presets_frame, text=name, style="Compact.TButton",
-                           command=lambda n=name: self._apply_preset(n))
-            btn.pack(fill="x", pady=2)
+        for name in preset_names:
+            slot_frame = ttk.Frame(presets_frame)
+            slot_frame.pack(fill="x", pady=3)
+            
+            # Preset name label
+            name_label = ttk.Label(slot_frame, text=name, style="Compact.TLabel", width=12, anchor="w")
+            name_label.pack(side="left", padx=(0, 5))
+            
+            # Load button
+            load_btn = ttk.Button(slot_frame, text="Load", style="Preset.TButton", width=6,
+                                command=lambda n=name: self._apply_preset(n))
+            load_btn.pack(side="left", padx=(0, 5))
+            
+            # Edit button (always visible)
+            edit_btn = ttk.Button(slot_frame, text="Edit", style="Preset.TButton", width=6,
+                                command=lambda n=name: self._edit_preset(n))
+            edit_btn.pack(side="left")
+            
+            self.preset_slots[name] = {
+                "frame": slot_frame,
+                "name_label": name_label,
+                "load_btn": load_btn,
+                "edit_btn": edit_btn
+            }
 
-        # Edit presets button
-        edit_btn = ttk.Button(controls_frame, text="Edit Presets", style="TButton",
-                            command=self._show_preset_editor)
-        edit_btn.pack(fill="x", pady=(8, 0))
+        # Edit all presets button
+        edit_all_btn = ttk.Button(controls_frame, text="Edit All Presets", style="TButton",
+                                command=self._show_preset_editor)
+        edit_all_btn.pack(fill="x", pady=(8, 0))
 
         # Quit button at bottom of controls
         quit_btn = ttk.Button(controls_frame, text="Quit", style="TButton", command=self._quit_app)
@@ -375,9 +439,10 @@ class DSPGui(tk.Tk):
         else:
             self.destroy()
 
-    # ------------- Preset System -------------
+    # ------------- Simplified Preset System -------------
     def _apply_preset(self, name):
-        """Apply preset values to sliders"""
+        """Apply preset values to sliders with sound feedback"""
+        self.sound_manager.play_sweep()  # Play sound when loading preset
         preset = self.preset_manager.presets.get(name)
         if preset:
             self.cf_slider.set(preset["cf"])
@@ -386,57 +451,139 @@ class DSPGui(tk.Tk):
             self._apply_bw(preset["bw"])
             self._schedule_plot()
 
-    def _show_preset_editor(self):
-        """Popup window to edit presets"""
+    def _edit_preset(self, name):
+        """Quick edit for a single preset"""
+        self.sound_manager.play_click()
+        preset = self.preset_manager.presets.get(name)
+        if preset:
+            self._show_single_preset_editor(name, preset["cf"], preset["bw"])
+
+    def _show_single_preset_editor(self, name, current_cf, current_bw):
+        """Popup to edit a single preset"""
         editor = tk.Toplevel(self)
-        editor.title("Edit Presets")
-        editor.geometry("500x400")
+        editor.title(f"Edit {name}")
+        editor.geometry("300x250")
+        editor.transient(self)
+        editor.grab_set()
+        
+        ttk.Label(editor, text=f"Editing {name}", style="Big.TLabel").pack(pady=10)
+        
+        # Name input 
+        name_frame = ttk.Frame(editor)
+        name_frame.pack(fill="x", pady=5, padx=20)
+        ttk.Label(name_frame, text="Preset Name:").pack(side="left")
+        name_var = tk.StringVar(value=name)
+        name_entry = ttk.Entry(name_frame, textvariable=name_var, width=12)
+        name_entry.pack(side="right")
+
+        # CF input
+        cf_frame = ttk.Frame(editor)
+        cf_frame.pack(fill="x", pady=5, padx=20)
+        ttk.Label(cf_frame, text="Center Freq (Hz):").pack(side="left")
+        cf_var = tk.IntVar(value=current_cf)
+        cf_entry = ttk.Entry(cf_frame, textvariable=cf_var, width=8)
+        cf_entry.pack(side="right")
+        
+        # BW input
+        bw_frame = ttk.Frame(editor)
+        bw_frame.pack(fill="x", pady=5, padx=20)
+        ttk.Label(bw_frame, text="Bandwidth (Hz):").pack(side="left")
+        bw_var = tk.IntVar(value=current_bw)
+        bw_entry = ttk.Entry(bw_frame, textvariable=bw_var, width=8)
+        bw_entry.pack(side="right")
+        
+        def save_and_close():
+            new_name = name_var.get()
+            # If name changed, update the preset structure
+            if new_name != name:
+                # Remove old preset and create new one
+                self.preset_manager.presets[new_name] = self.preset_manager.presets.pop(name)
+                # Update the UI slot if needed
+                self._update_preset_slot_name(name, new_name)
+
+            self.preset_manager.presets[name] = {"cf": cf_var.get(), "bw": bw_var.get()}
+            self.sound_manager.play_click()
+            editor.destroy()
+        
+        ttk.Button(editor, text="Save", command=save_and_close).pack(pady=10)
+
+    def _update_preset_slot_name(self, old_name, new_name):
+        """Update the preset slot display when a preset name changes"""
+        if old_name in self.preset_slots:
+            slot = self.preset_slots[old_name]
+            slot["name_label"].configure(text=new_name)
+            # Update the command references
+            slot["load_btn"].configure(command=lambda:self._apply_preset(new_name))
+            slot["edit_btn"].configure(command=lambda:self._edit_preset(new_name))
+            # Update the slots dictionary
+            self.preset_slots[new_name] = self.preset_slots.pop(old_name)
+
+
+    def _show_preset_editor(self):
+        """Popup window to edit all presets"""
+        self.sound_manager.play_click()
+        editor = tk.Toplevel(self)
+        editor.title("Edit All Presets")
+        editor.geometry("500x350") 
         
         # Make it modal
         editor.transient(self)
         editor.grab_set()
         
-        # Preset list with scrollbar
-        frame = ttk.Frame(editor)
-        frame.pack(fill="both", expand=True, padx=10, pady=10)
+        ttk.Label(editor, text="Edit All Presets", style="Big.TLabel").pack(pady=10)
         
-        canvas = tk.Canvas(frame)
-        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
-        
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-        
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        
-        for i, (name, values) in enumerate(self.preset_manager.presets.items()):
-            row = ttk.Frame(scrollable_frame)
-            row.pack(fill="x", pady=4)
-            
-            ttk.Label(row, text=name, width=15).pack(side="left")
-            ttk.Label(row, text="CF:").pack(side="left", padx=(10, 2))
-            cf_var = tk.IntVar(value=values["cf"])
-            ttk.Entry(row, textvariable=cf_var, width=6).pack(side="left")
-            
-            ttk.Label(row, text="BW:").pack(side="left", padx=(10, 2))
-            bw_var = tk.IntVar(value=values["bw"])
-            ttk.Entry(row, textvariable=bw_var, width=6).pack(side="left")
-            
-            ttk.Button(row, text="Update", 
-                      command=lambda n=name, c=cf_var, b=bw_var: 
-                      self._update_preset(n, c.get(), b.get())).pack(side="right")
-        
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        
-        ttk.Button(editor, text="Close", command=editor.destroy).pack(pady=10)
+        # Preset editing area
+        edit_frame = ttk.Frame(editor)
+        edit_frame.pack(fill="both", expand=True, padx=20, pady=10)
 
-    def _update_preset(self, name, cf, bw):
-        """Update a preset with new values"""
-        self.preset_manager.presets[name] = {"cf": cf, "bw": bw}
+        # Headers
+
+        
+        self.preset_vars = {}
+        row = 0
+        for name, values in self.preset_manager.presets.items():
+            ttk.Label(edit_frame, text=name, width=12).grid(row=row, column=0, sticky="w", pady=2)
+            
+            cf_var = tk.IntVar(value=values["cf"])
+            cf_entry = ttk.Entry(edit_frame, textvariable=cf_var, width=6)
+            cf_entry.grid(row=row, column=1, padx=5, pady=2)
+            
+            ttk.Label(edit_frame, text="Hz CF,").grid(row=row, column=2, sticky="w", pady=2)
+            
+            bw_var = tk.IntVar(value=values["bw"])
+            bw_entry = ttk.Entry(edit_frame, textvariable=bw_var, width=6)
+            bw_entry.grid(row=row, column=3, padx=5, pady=2)
+            
+            ttk.Label(edit_frame, text="Hz BW").grid(row=row, column=4, sticky="w", pady=2)
+            
+            self.preset_vars[name] = {"cf": cf_var, "bw": bw_var}
+            row += 1
+        
+        def save_all():
+            new_presets = {}
+            name_changes = {}
+
+            # Collect all changes
+            for old_name, vars in self.preset_vars.items():
+                new_name = vars["name"].get()
+                new_presets[new_name] = {
+                    "cf": vars["cf"].get(), 
+                    "bw": vars["bw"].get()
+                }
+                if new_name != old_name:
+                    name_changes[old_name] = new_name
+            
+            # Update the preset manager
+            self.preset_manager.presets = new_presets
+
+            # Update UI for any name changes
+            for old_name, new_name in name_changes.items():
+                self._update_preset_slot_name(old_name, new_name)
+                
+            self.sound_manager.play_click()
+            editor.destroy()
+        
+        ttk.Button(editor, text="Save All", command=save_all).pack(pady=10)
 
     # ---------------- Slider handlers (debounced) ----------------
     def _on_cf_change(self, _s: str):
@@ -453,6 +600,7 @@ class DSPGui(tk.Tk):
 
     # ---------------- DSP/BYPASS ----------------
     def _on_dsp_toggled(self, dsp_on: bool):
+        self.sound_manager.play_click()  # Sound when toggling DSP
         self._apply_bypass(not dsp_on)
 
     # ---------------- Apply to HW + publish ----------------
