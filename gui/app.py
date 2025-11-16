@@ -28,12 +28,7 @@ except Exception:
     Figure = None
     FigureCanvasTkAgg = None
 
-# Sound effects (optional)
-try:
-    import pygame
-    PYGAME_AVAILABLE = True
-except ImportError:
-    PYGAME_AVAILABLE = False
+
 
 from eventbus import EventBus
 from hardware.base import HardwareController
@@ -326,53 +321,6 @@ class PresetManager:
         return self.presets.get(preset_name)
 
 
-class SoundManager:
-    def __init__(self):
-        self.enabled = PYGAME_AVAILABLE
-        if self.enabled:
-            try:
-                pygame.mixer.init()
-                # Create a simple beep sound (you can replace with actual sound files)
-                self._create_beep_sounds()
-            except Exception:
-                self.enabled = False
-    
-    def _create_beep_sounds(self):
-        """Create simple beep sounds programmatically"""
-        try:
-            import numpy as np
-            
-            # Click sound for buttons
-            sample_rate = 22050
-            duration = 0.1
-            t = np.linspace(0, duration, int(sample_rate * duration))
-            click_wave = 0.3 * np.sin(2 * np.pi * 800 * t) * np.exp(-5 * t)
-            click_wave = np.int16(click_wave * 32767)
-            self.click_sound = pygame.sndarray.make_sound(click_wave)
-            
-            # Sweep sound for preset changes
-            sweep_duration = 0.3
-            t_sweep = np.linspace(0, sweep_duration, int(sample_rate * sweep_duration))
-            sweep_wave = 0.2 * np.sin(2 * np.pi * (400 + 800 * t_sweep / sweep_duration) * t_sweep)
-            sweep_wave = np.int16(sweep_wave * 32767)
-            self.sweep_sound = pygame.sndarray.make_sound(sweep_wave)
-            
-        except Exception:
-            self.enabled = False
-    
-    def play_click(self):
-        if self.enabled:
-            try:
-                self.click_sound.play()
-            except Exception:
-                pass
-    
-    def play_sweep(self):
-        if self.enabled:
-            try:
-                self.sweep_sound.play()
-            except Exception:
-                pass
 
 
 class DSPGui(tk.Tk):
@@ -380,8 +328,6 @@ class DSPGui(tk.Tk):
         super().__init__()
         self.hw, self.bus = hw, bus
 
-        # ---------------- Sound Manager ----------------
-        self.sound_manager = SoundManager()
 
         # ---------------- Window Configuration ----------------
         self.title("DSP Audio Filter Control")
@@ -642,7 +588,7 @@ class DSPGui(tk.Tk):
     # ------------- Enhanced Preset System with Save Functionality -------------
     def _save_preset(self, name):
         """Save current GUI settings to a preset"""
-        self.sound_manager.play_click()
+        
         current_cf = self.cf_var.get()
         current_bw = self.bw_var.get()
         current_vol = self.vol_var.get()
@@ -655,8 +601,7 @@ class DSPGui(tk.Tk):
         self.after(1000, lambda: self.preset_slots[name]["name_label"].configure(text=original_text))
 
     def _apply_preset(self, name):
-        """Apply preset values to sliders with sound feedback"""
-        self.sound_manager.play_sweep()  # Play sound when loading preset
+        """Apply preset values to sliders"""
         preset = self.preset_manager.get_preset(name)
         if preset:
             self.cf_slider.set(preset["cf"])
@@ -669,7 +614,6 @@ class DSPGui(tk.Tk):
 
     def _edit_preset(self, name):
         """Quick edit for a single preset"""
-        self.sound_manager.play_click()
         preset = self.preset_manager.get_preset(name)
         if preset:
             self._show_single_preset_editor(name, preset["cf"], preset["bw"])
@@ -718,7 +662,6 @@ class DSPGui(tk.Tk):
             
             # Update values
             self.preset_manager.presets[new_name] = {"cf": cf_var.get(), "bw": bw_var.get(), "vol": 60}
-            self.sound_manager.play_click()
             editor.destroy()
         
         ttk.Button(editor, text="Save", command=save_and_close).pack(pady=10)
@@ -737,7 +680,6 @@ class DSPGui(tk.Tk):
 
     def _show_preset_editor(self):
         """Popup window to edit all presets including names"""
-        self.sound_manager.play_click()
         editor = tk.Toplevel(self)
         editor.title("Edit All Presets")
         editor.geometry("500x350")  # Slightly wider for name fields
@@ -800,7 +742,6 @@ class DSPGui(tk.Tk):
             for old_name, new_name in name_changes.items():
                 self._update_preset_slot_name(old_name, new_name)
             
-            self.sound_manager.play_click()
             editor.destroy()
         
         ttk.Button(editor, text="Save All", command=save_all).pack(pady=10)
@@ -808,7 +749,7 @@ class DSPGui(tk.Tk):
     # ---------------- DSP/BYPASS State Management ----------------
     def _on_dsp_toggled(self, dsp_on: bool):
         """Handle DSP/BYPASS toggle with visual state updates"""
-        self.sound_manager.play_click()  # Sound when toggling DSP
+
         
         # The toggle switch returns True when DSP is active (toggle to the right)
         # and False when BYPASS is active (toggle to the left)
