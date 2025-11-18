@@ -1,4 +1,10 @@
-# gui/app.py
+# FINAL MERGED app.py
+# Complete, ready-to-run single file with:
+# - Top-left: Presets
+# - Top-right: Graph
+# - Bottom: Sliders + DSP/BYPASS
+# - All original logic preserved and merged
+
 from __future__ import annotations
 import sys
 import math
@@ -27,7 +33,6 @@ except Exception:
     matplotlib = None
     Figure = None
     FigureCanvasTkAgg = None
-
 
 
 from eventbus import EventBus
@@ -155,6 +160,7 @@ class ValueSlider(ttk.Frame):
         self.command = command
         self.unit = unit
         self.is_percent = is_percent
+        self.on_release = None
 
         # Step used by arrow buttons (keeps existing behavior: Hz snaps to 25)
         self.step = 25 if not is_percent else 1
@@ -246,6 +252,8 @@ class ValueSlider(ttk.Frame):
         if not self.is_percent:
             v = round(v / 25) * 25
         self.var.set(v)  # triggers _on_value_change -> your command
+        if self.on_release:
+            self.on_release()
 
     def _on_slide(self, value):
         # Live display while dragging; keep the same 25 Hz snap visual for Hz
@@ -302,7 +310,6 @@ class ValueSlider(ttk.Frame):
             self.range_end.configure(foreground="#666666")
 
 
-
 class PresetManager:
     def __init__(self):
         # Enhanced preset system with auto-save capability
@@ -319,7 +326,6 @@ class PresetManager:
     def get_preset(self, preset_name: str):
         """Get preset values"""
         return self.presets.get(preset_name)
-
 
 
 
@@ -405,79 +411,38 @@ class DSPGui(tk.Tk):
         # ---------------- Preset Manager ----------------
         self.preset_manager = PresetManager()
 
-        # ---------------- Layout - 50/50 Split ----------------
+        # ---------------- Layout - 2x2 Grid ----------------
         root = ttk.Frame(self)
         root.pack(fill="both", expand=True, padx=8, pady=8)
 
-        # Main container with two equal columns
         main_container = ttk.Frame(root)
         main_container.pack(fill="both", expand=True)
 
-        # Left column: Controls (50% width)
-        controls_frame = ttk.Frame(main_container)
-        controls_frame.pack(side="left", fill="both", expand=True, padx=(0, 5))
-        
-        # Right column: Graph (50% width)
-        graph_frame = ttk.Frame(main_container)
-        graph_frame.pack(side="right", fill="both", expand=True, padx=(5, 0))
+        # Configure grid
+        main_container.columnconfigure(0, weight=1)
+        main_container.columnconfigure(1, weight=1)
+        main_container.rowconfigure(0, weight=1)
+        main_container.rowconfigure(1, weight=1)
 
-        # Header title in controls column
-        title = ttk.Label(controls_frame, text="DSP Audio Filter Control", style="Title.TLabel", anchor="center")
+        # Frames
+        presets_frame = ttk.Frame(main_container)
+        graph_frame = ttk.Frame(main_container)
+        bottom_frame = ttk.Frame(main_container)
+
+        presets_frame.grid(row=0, column=0, sticky="nsew", padx=(0,5), pady=(0,5))
+        graph_frame.grid(row=0, column=1, sticky="nsew", padx=(5,0), pady=(0,5))
+        bottom_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(5,0))
+
+        # Header title moved to presets frame (top-left)
+        title = ttk.Label(presets_frame, text="DSP Audio Filter Control", style="Title.TLabel", anchor="center")
         title.pack(pady=(0, 15))
 
-        # LEVEL row with DSP/BYPASS toggle integrated - FIXED POSITIONS
-        level_row = ttk.Frame(controls_frame)
-        level_row.pack(fill="x", pady=(4, 12), ipady=2)
-        
-        ttk.Label(level_row, text="Level", style="Big.TLabel").pack(side="left")
-        self.level_led = Led(level_row, size=16)
-        self.level_led.pack(side="left", padx=(8, 0))
-        
-        # Add spacer between LED and DSP/BYPASS toggle
-        ttk.Label(level_row, text="", width=4).pack(side="left")
-        
-        # DSP/BYPASS toggle integrated in LEVEL row - SWAPPED POSITIONS
-        # BYPASS on left, toggle in middle, DSP on right
-        self.bypass_label = ttk.Label(level_row, text="BYPASS", style="Big.TLabel")
-        self.bypass_label.pack(side="left", padx=(0, 8), pady=2)
-        self.bypass_switch = ToggleSwitch(level_row, width=60, height=28)
-        self.bypass_switch.pack(side="left", pady=2)
-        self.bypass_switch.set(False)  # Start with BYPASS off (DSP on)
-        self.bypass_switch.on_toggle = self._on_dsp_toggled
-        self.dsp_label = ttk.Label(level_row, text="DSP", style="Big.TLabel")
-        self.dsp_label.pack(side="left", padx=(12, 0), pady=2)
+        # ---------------- PRESETS SECTION (top-left) ----------------
+        presets_label = ttk.Label(presets_frame, text="PRESETS", style="Big.TLabel")
+        presets_label.pack(anchor="w", pady=(0, 8))
 
-        # CF row with enhanced slider
-        cf_frame = ttk.Frame(controls_frame)
-        cf_frame.pack(fill="x", pady=(8, 2))
-        self.cf_slider = ValueSlider(cf_frame, "Center Frequency", 300, 3000, 
-                                   self._on_cf_change, "Hz")
-        self.cf_slider.pack(fill="x")
-        self.cf_var = self.cf_slider.var
-
-        # Bandwidth row with enhanced slider
-        bw_frame = ttk.Frame(controls_frame)
-        bw_frame.pack(fill="x", pady=(8, 2))
-        self.bw_slider = ValueSlider(bw_frame, "Bandwidth", 300, 3000, 
-                                   self._on_bw_change, "Hz")
-        self.bw_slider.pack(fill="x")
-        self.bw_var = self.bw_slider.var
-
-        # Volume row
-        vol_frame = ttk.Frame(controls_frame)
-        vol_frame.pack(fill="x", pady=(8, 2))
-        self.vol_slider = ValueSlider(vol_frame, "Volume", 0, 100, 
-                                    self._on_vol_change, "%", is_percent=True)
-        self.vol_slider.pack(fill="x")
-        self.vol_var = self.vol_slider.var
-
-        # ---------------- PRESETS SECTION ----------------
-        presets_label = ttk.Label(controls_frame, text="PRESETS", style="Big.TLabel")
-        presets_label.pack(anchor="w", pady=(20, 8))
-
-        # Preset bank with compact layout
-        presets_frame = ttk.Frame(controls_frame)
-        presets_frame.pack(fill="x", pady=(0, 8))
+        presets_list_frame = ttk.Frame(presets_frame)
+        presets_list_frame.pack(fill="x", pady=(0,8))
 
         # Initialize preset_slots BEFORE using it
         self.preset_slots = {}
@@ -489,7 +454,7 @@ class DSPGui(tk.Tk):
         button_style = "Preset.TButton" if self._is_touchscreen_mode() else "TButton"
 
         for name in preset_names:
-            slot_frame = ttk.Frame(presets_frame)
+            slot_frame = ttk.Frame(presets_list_frame)
             slot_frame.pack(fill="x", pady=2)  # Reduced padding
             
             # Preset name label - fixed width for alignment
@@ -530,15 +495,15 @@ class DSPGui(tk.Tk):
             }
 
         # Edit all presets button - make sure it's visible
-        edit_all_btn = ttk.Button(controls_frame, text="Edit All Presets", style="TButton",
+        edit_all_btn = ttk.Button(presets_frame, text="Edit All Presets", style="TButton",
                                 command=self._show_preset_editor)
         edit_all_btn.pack(fill="x", pady=(12, 0))
 
-        # Quit button at bottom of controls - make sure it's visible
-        quit_btn = ttk.Button(controls_frame, text="Quit", style="TButton", command=self._quit_app)
+        # Quit button at bottom of presets frame - make sure it's visible
+        quit_btn = ttk.Button(presets_frame, text="Quit", style="TButton", command=self._quit_app)
         quit_btn.pack(side="bottom", pady=(15, 0), fill="x")
 
-        # ---------------- Frequency response plot (50% width but still large) ----------------
+        # ---------------- Frequency response plot (top-right) ----------------
         plot_container = ttk.Frame(graph_frame)
         plot_container.pack(fill="both", expand=True)
 
@@ -547,6 +512,64 @@ class DSPGui(tk.Tk):
             self._init_mpl_plot(plot_container)
         else:
             self._init_tk_plot(plot_container)
+
+        # ---------------- SLIDERS + DSP/BYPASS (bottom half) ----------------
+
+        # LEVEL row with DSP/BYPASS toggle integrated - placed in bottom_frame
+        level_row = ttk.Frame(bottom_frame)
+        level_row.pack(fill="x", pady=(4, 12), ipady=2)
+        
+        ttk.Label(level_row, text="Level", style="Big.TLabel").pack(side="left")
+        self.level_led = Led(level_row, size=16)
+        self.level_led.pack(side="left", padx=(8, 0))
+        
+        # Add spacer between LED and DSP/BYPASS toggle
+        ttk.Label(level_row, text="", width=4).pack(side="left")
+        
+        # DSP/BYPASS toggle integrated in LEVEL row - SWAPPED POSITIONS
+        # BYPASS on left, toggle in middle, DSP on right
+        self.bypass_label = ttk.Label(level_row, text="BYPASS", style="Big.TLabel")
+        self.bypass_label.pack(side="left", padx=(0, 8), pady=2)
+        self.bypass_switch = ToggleSwitch(level_row, width=60, height=28)
+        self.bypass_switch.pack(side="left", pady=2)
+        self.bypass_switch.set(False)  # Start with BYPASS off (DSP on)
+        self.bypass_switch.on_toggle = self._on_dsp_toggled
+        self.dsp_label = ttk.Label(level_row, text="DSP", style="Big.TLabel")
+        self.dsp_label.pack(side="left", padx=(12, 0), pady=2)
+
+        # CF row with enhanced slider (bottom_frame)
+        cf_frame = ttk.Frame(bottom_frame)
+        cf_frame.pack(fill="x", pady=(8, 2))
+        self.cf_slider = ValueSlider(cf_frame, "Center Frequency", 300, 3000, 
+                                   self._on_cf_change, "Hz")
+        self.cf_slider.pack(fill="x")
+        self.cf_var = self.cf_slider.var
+
+        # Bandwidth row with enhanced slider
+        bw_frame = ttk.Frame(bottom_frame)
+        bw_frame.pack(fill="x", pady=(8, 2))
+        self.bw_slider = ValueSlider(bw_frame, "Bandwidth", 300, 3000, 
+                                   self._on_bw_change, "Hz")
+        self.bw_slider.pack(fill="x")
+        self.bw_var = self.bw_slider.var
+
+        # Volume row
+        vol_frame = ttk.Frame(bottom_frame)
+        vol_frame.pack(fill="x", pady=(8, 2))
+        self.vol_slider = ValueSlider(vol_frame, "Volume", 0, 100, 
+                                    self._on_vol_change, "%", is_percent=True)
+        self.vol_slider.pack(fill="x")
+        self.vol_var = self.vol_slider.var
+
+        # Update on slider release instead of continuously
+        self.cf_slider.scale.bind("<ButtonRelease-1>", lambda e: self._apply_cf(self.cf_var.get()) or self._schedule_plot())
+        self.bw_slider.scale.bind("<ButtonRelease-1>", lambda e: self._apply_bw(self.bw_var.get()) or self._schedule_plot())
+        self.vol_slider.scale.bind("<ButtonRelease-1>", lambda e: self._apply_vol(self.vol_var.get() / 100.0) or self._schedule_plot())
+
+        #Update when using arrows to move slider.
+        self.cf_slider.on_release = lambda: (self._apply_cf(self.cf_var.get()), self._schedule_plot())
+        self.bw_slider.on_release = lambda: (self._apply_bw(self.bw_var.get()), self._schedule_plot())  
+        self.vol_slider.on_release = lambda: (self._apply_vol(self.vol_var.get() / 100.0), self._schedule_plot())
 
         # Defaults
         self.cf_var.set(750)
@@ -616,7 +639,7 @@ class DSPGui(tk.Tk):
         """Quick edit for a single preset"""
         preset = self.preset_manager.get_preset(name)
         if preset:
-            self._show_single_preset_editor(name, preset["cf"], preset["bw"])
+            self._show_single_preset_editor(name, preset["cf"], preset["bw"]) 
 
     def _show_single_preset_editor(self, name, current_cf, current_bw):
         """Popup to edit a single preset including name"""
@@ -750,7 +773,6 @@ class DSPGui(tk.Tk):
     def _on_dsp_toggled(self, dsp_on: bool):
         """Handle DSP/BYPASS toggle with visual state updates"""
 
-        
         # The toggle switch returns True when DSP is active (toggle to the right)
         # and False when BYPASS is active (toggle to the left)
         self._apply_bypass(not dsp_on)  # Send bypass=True when DSP is off
@@ -776,15 +798,14 @@ class DSPGui(tk.Tk):
     # ---------------- Slider handlers (debounced) ----------------
     def _on_cf_change(self, _s: str):
         if self._cf_after_id: self.after_cancel(self._cf_after_id)
-        self._cf_after_id = self.after(120, lambda: (self._apply_cf(int(self.cf_var.get())), self._schedule_plot()))
+        self._cf_after_id = self.after(120, lambda: None)
 
     def _on_bw_change(self, _s: str):
         if self._bw_after_id: self.after_cancel(self._bw_after_id)
-        self._bw_after_id = self.after(120, lambda: (self._apply_bw(int(self.bw_var.get())), self._schedule_plot()))
-
+        self._bw_after_id = self.after(120, lambda: None)
     def _on_vol_change(self, _s: str):
         if self._vol_after_id: self.after_cancel(self._vol_after_id)
-        self._vol_after_id = self.after(120, lambda: (self._apply_vol(float(self.vol_var.get()) / 100.0), self._schedule_plot()))
+        self._vol_after_id = self.after(120, lambda: None)
 
     # ---------------- Apply to HW + publish ----------------
     def _apply_cf(self, hz: int):
@@ -805,6 +826,7 @@ class DSPGui(tk.Tk):
             mode = "narrow" if hz < 900 else ("medium" if hz < 1800 else "wide")
             try:
                 self.hw.set_bandwidth_mode(mode)
+                used = True
             except Exception:
                 pass
         try: self.bus.publish("bandwidth_hz", hz)
