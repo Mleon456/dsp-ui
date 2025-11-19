@@ -1,10 +1,3 @@
-# FINAL MERGED app.py
-# Complete, ready-to-run single file with:
-# - Top-left: Presets
-# - Top-right: Graph
-# - Bottom: Sliders + DSP/BYPASS
-# - All original logic preserved and merged
-
 from __future__ import annotations
 import sys
 import math
