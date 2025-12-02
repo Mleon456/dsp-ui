@@ -157,6 +157,7 @@ class ValueSlider(ttk.Frame):
 
         # Step used by arrow buttons (keeps existing behavior: Hz snaps to 25)
         self.step = 25 if not is_percent else 1
+        self.dynamic_step_callback = None
 
         # Main variable
         self.var = tk.IntVar(value=from_)
@@ -238,22 +239,39 @@ class ValueSlider(ttk.Frame):
       
 
     def _nudge(self, delta: int):
-        """Move value by a small step, clamped to range."""
+       
         v = int(self.var.get())
-        v = max(self.from_, min(self.to, v + delta))
-        # Keep existing snap for frequency sliders
+
+        # If dynamic step logic exists, get step size from callback
+        step = self.dynamic_step_callback(v) if self.dynamic_step_callback else self.step
+
+        # Apply delta
+        v = max(self.from_, min(self.to, v + (delta // abs(delta)) * step))
+
+        # Snap to nearest step
         if not self.is_percent:
-            v = round(v / 25) * 25
+            v = round(v / step) * step
+
         self.var.set(v)  # triggers _on_value_change -> your command
         if self.on_release:
             self.on_release()
 
     def _on_slide(self, value):
-        # Live display while dragging; keep the same 25 Hz snap visual for Hz
-        current_val = int(float(value))
-        if not self.is_percent:
-            current_val = round(current_val / 25) * 25
-        self._update_display(current_val)
+       
+        raw = int(float(value))
+
+        # Determine step (dynamic or fixed)
+        step = self.dynamic_step_callback(raw) if self.dynamic_step_callback else self.step
+
+        # Snap to nearest allowed step
+        snapped = round(raw / step) * step
+
+        # Clamp to range
+        snapped = max(self.from_, min(self.to, snapped))
+
+        # Update displayed value
+        self.var.set(snapped)
+        self._update_display(snapped)
 
     def _on_value_change(self, *args):
         current_val = self.var.get()
@@ -487,10 +505,7 @@ class DSPGui(tk.Tk):
                 "edit_btn": edit_btn
             }
 
-        # Edit all presets button - make sure it's visible
-        edit_all_btn = ttk.Button(presets_frame, text="Edit All Presets", style="TButton",
-                                command=self._show_preset_editor)
-        edit_all_btn.pack(fill="x", pady=(12, 0))
+        
 
         # Quit button at bottom of presets frame - make sure it's visible
         quit_btn = ttk.Button(presets_frame, text="Quit", style="TButton", command=self._quit_app)
@@ -533,16 +548,26 @@ class DSPGui(tk.Tk):
         # CF row with enhanced slider (bottom_frame)
         cf_frame = ttk.Frame(bottom_frame)
         cf_frame.pack(fill="x", pady=(8, 2))
-        self.cf_slider = ValueSlider(cf_frame, "Center Frequency", 300, 3000, 
+        self.cf_slider = ValueSlider(cf_frame, "Center Frequency", 200, 3500, 
                                    self._on_cf_change, "Hz")
+        self.cf_slider.dynamic_step_callback = lambda v: 25 if v < 2000 else 50
         self.cf_slider.pack(fill="x")
         self.cf_var = self.cf_slider.var
 
         # Bandwidth row with enhanced slider
         bw_frame = ttk.Frame(bottom_frame)
         bw_frame.pack(fill="x", pady=(8, 2))
-        self.bw_slider = ValueSlider(bw_frame, "Bandwidth", 300, 3000, 
+        self.bw_slider = ValueSlider(bw_frame, "Bandwidth", 200, 3500, 
                                    self._on_bw_change, "Hz")
+        def bw_step(v):
+            if v < 400:
+                return 20
+            elif v < 700:
+                return 50
+            else:
+                return 100
+
+        self.bw_slider.dynamic_step_callback = bw_step
         self.bw_slider.pack(fill="x")
         self.bw_var = self.bw_slider.var
 
@@ -919,8 +944,8 @@ class DSPGui(tk.Tk):
 
     def _update_cursors(self, f0, bw):
         """Update cursor positions and labels"""
-        low_freq = max(300, f0 - bw/2)
-        high_freq = min(3000, f0 + bw/2)
+        low_freq = max(200, f0 - bw/2)
+        high_freq = min(3500, f0 + bw/2)
         
         self.cf_cursor.set_xdata([f0, f0])
         self.bw_low_cursor.set_xdata([low_freq, low_freq])
