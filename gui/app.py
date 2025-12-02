@@ -26,7 +26,11 @@ except Exception:
     matplotlib = None
     Figure = None
     FigureCanvasTkAgg = None
-
+try:
+    from ctypes import windll
+    windll.shcore.SetProcessDpiAwareness(1)
+except:
+    pass
 
 from eventbus import EventBus
 from hardware.base import HardwareController
@@ -349,14 +353,9 @@ class DSPGui(tk.Tk):
         # ---------------- Window Configuration ----------------
         self.title("DSP Audio Filter Control")
         
-        # Set appropriate sizes for different displays
-        if self._is_touchscreen_mode():
-            # Touchscreen mode - fullscreen
-            self.attributes('-fullscreen', True)
-        else:
-            # Laptop mode - balanced window for 50/50 split
-            self.geometry("1000x700+50+50")  # Good balance for 50/50
-            self.minsize(900, 600)
+       
+        self.geometry("1000x700+50+50")  # Good balance for 50/50
+        self.minsize(900, 620)
         
         # Escape to exit fullscreen on touchscreen, close on laptop
         self.bind("<Escape>", self._on_escape)
@@ -400,6 +399,9 @@ class DSPGui(tk.Tk):
                        borderwidth=1, 
                        padding=(6, 3),
                        )
+        style.configure("Mute.TButton", padding=(8, 3), font=("Segoe UI", font_size-1))
+        style.configure("MuteActive.TButton", padding=(8, 3), font=("Segoe UI", font_size-1),
+                background="#ff6b6b", foreground="black")
         # New style for disabled state
         style.configure("Disabled.TLabel", foreground="#999999")
         style.configure("Disabled.TButton", foreground="#999999")
@@ -424,16 +426,16 @@ class DSPGui(tk.Tk):
 
         # ---------------- Layout - 2x2 Grid ----------------
         root = ttk.Frame(self)
-        root.pack(fill="both", expand=True, padx=8, pady=8)
+        root.pack(fill="both", expand=True, padx=8, pady=(0,8))
 
         main_container = ttk.Frame(root)
-        main_container.pack(fill="both", expand=True)
+        main_container.pack(fill="both", expand=True, padx=5, pady=5)
 
         # Configure grid
         main_container.columnconfigure(0, weight=1)
         main_container.columnconfigure(1, weight=1)
-        main_container.rowconfigure(0, weight=1)
-        main_container.rowconfigure(1, weight=1)
+        main_container.rowconfigure(0, weight=2, minsize=280)
+        main_container.rowconfigure(1, weight=0, minsize=340)
 
         # Frames
         presets_frame = ttk.Frame(main_container)
@@ -443,10 +445,11 @@ class DSPGui(tk.Tk):
         presets_frame.grid(row=0, column=0, sticky="nsew", padx=(0,5), pady=(0,5))
         graph_frame.grid(row=0, column=1, sticky="nsew", padx=(5,0), pady=(0,5))
         bottom_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(5,0))
-
-        # Header title moved to presets frame (top-left)
-        title = ttk.Label(presets_frame, text="DSP Audio Filter Control", style="Title.TLabel", anchor="center")
-        title.pack(pady=(0, 15))
+        presets_frame.configure(padding=(5, 5, 5, 5))
+        graph_frame.configure(padding=(5, 5, 5, 5))
+        bottom_frame.configure(padding=(5, 5, 5, 10))
+      
+        
 
         # ---------------- PRESETS SECTION (top-left) ----------------
         presets_label = ttk.Label(presets_frame, text="PRESETS", style="Big.TLabel")
@@ -505,7 +508,27 @@ class DSPGui(tk.Tk):
                 "edit_btn": edit_btn
             }
 
-        
+        # Add Level + DSP/BYPASS controls inside the presets area
+        toggle_row = ttk.Frame(presets_frame)
+        toggle_row.pack(fill="x", pady=10)
+
+        ttk.Label(toggle_row, text="Level", style="Big.TLabel").pack(side="left")
+        self.level_led = Led(toggle_row, size=16)
+        self.level_led.pack(side="left", padx=(8, 0))
+
+        # Spacer
+        ttk.Label(toggle_row, text="", width=3).pack(side="left")
+
+        self.bypass_label = ttk.Label(toggle_row, text="BYPASS", style="Big.TLabel")
+        self.bypass_label.pack(side="left", padx=(0, 8))
+
+        self.bypass_switch = ToggleSwitch(toggle_row, width=60, height=28)
+        self.bypass_switch.pack(side="left")
+        self.bypass_switch.set(False)  # DSP ON by default
+        self.bypass_switch.on_toggle = self._on_dsp_toggled
+
+        self.dsp_label = ttk.Label(toggle_row, text="DSP", style="Big.TLabel")
+        self.dsp_label.pack(side="left", padx=(12, 0))
 
         # Quit button at bottom of presets frame - make sure it's visible
         quit_btn = ttk.Button(presets_frame, text="Quit", style="TButton", command=self._quit_app)
@@ -513,7 +536,7 @@ class DSPGui(tk.Tk):
 
         # ---------------- Frequency response plot (top-right) ----------------
         plot_container = ttk.Frame(graph_frame)
-        plot_container.pack(fill="both", expand=True)
+        plot_container.pack(fill="both", expand=True, padx=0,pady=0)
 
         self._use_mpl = matplotlib is not None and np is not None
         if self._use_mpl:
@@ -521,29 +544,7 @@ class DSPGui(tk.Tk):
         else:
             self._init_tk_plot(plot_container)
 
-        # ---------------- SLIDERS + DSP/BYPASS (bottom half) ----------------
 
-        # LEVEL row with DSP/BYPASS toggle integrated - placed in bottom_frame
-        level_row = ttk.Frame(bottom_frame)
-        level_row.pack(fill="x", pady=(4, 12), ipady=2)
-        
-        ttk.Label(level_row, text="Level", style="Big.TLabel").pack(side="left")
-        self.level_led = Led(level_row, size=16)
-        self.level_led.pack(side="left", padx=(8, 0))
-        
-        # Add spacer between LED and DSP/BYPASS toggle
-        ttk.Label(level_row, text="", width=4).pack(side="left")
-        
-        # DSP/BYPASS toggle integrated in LEVEL row - SWAPPED POSITIONS
-        # BYPASS on left, toggle in middle, DSP on right
-        self.bypass_label = ttk.Label(level_row, text="BYPASS", style="Big.TLabel")
-        self.bypass_label.pack(side="left", padx=(0, 8), pady=2)
-        self.bypass_switch = ToggleSwitch(level_row, width=60, height=28)
-        self.bypass_switch.pack(side="left", pady=2)
-        self.bypass_switch.set(False)  # Start with BYPASS off (DSP on)
-        self.bypass_switch.on_toggle = self._on_dsp_toggled
-        self.dsp_label = ttk.Label(level_row, text="DSP", style="Big.TLabel")
-        self.dsp_label.pack(side="left", padx=(12, 0), pady=2)
 
         # CF row with enhanced slider (bottom_frame)
         cf_frame = ttk.Frame(bottom_frame)
@@ -579,6 +580,18 @@ class DSPGui(tk.Tk):
         self.vol_slider.pack(fill="x")
         self.vol_var = self.vol_slider.var
 
+        self._pre_mute_volume = 60
+        self._is_muted = False
+
+        top_row = self.vol_slider.value_display.master  # This is the top_row frame inside ValueSlider
+        mute_btn = ttk.Button(top_row, text="Mute", 
+                            style="Mute.TButton", width=6, command=self._toggle_mute)
+        self.mute_btn = mute_btn
+
+        # Repack value_display to ensure correct order: mute button on left, display on right
+        self.vol_slider.value_display.pack_forget()
+        self.vol_slider.value_display.pack(side="right")  # Then volume display
+        mute_btn.pack(side="right", padx=(0, 5))  
         # Update on slider release instead of continuously
         self.cf_slider.scale.bind("<ButtonRelease-1>", lambda e: self._apply_cf(self.cf_var.get()) or self._schedule_plot())
         self.bw_slider.scale.bind("<ButtonRelease-1>", lambda e: self._apply_bw(self.bw_var.get()) or self._schedule_plot())
@@ -813,6 +826,23 @@ class DSPGui(tk.Tk):
             self.dsp_label.configure(style="Disabled.TLabel")
             self.bypass_label.configure(style="Big.TLabel")
 
+    def _toggle_mute(self):
+        "Toggle mute - save current volume and set to 0, or restore previous volume"
+        if self._is_muted:
+            # Unmute - restore previous volume
+            self.vol_var.set(self._pre_mute_volume)
+            self._apply_vol(self._pre_mute_volume / 100.0)
+            self.mute_btn.configure(style="Mute.TButton")
+            self._is_muted = False
+        else:
+            # Mute - save current volume and set to 0
+            self._pre_mute_volume = self.vol_var.get()
+            self.vol_var.set(0)
+            self._apply_vol(0.0)
+            self.mute_btn.configure(style="MuteActive.TButton")
+            self._is_muted = True
+        #self._schedule_plot()
+
     # ---------------- Slider handlers (debounced) ----------------
     def _on_cf_change(self, _s: str):
         if self._cf_after_id: self.after_cancel(self._cf_after_id)
@@ -913,6 +943,7 @@ class DSPGui(tk.Tk):
         
         # Use dynamic figure size
         self._fig = Figure(figsize=self.plot_figsize, dpi=80)
+        self._fig.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.15)
         self._ax = self._fig.add_subplot(111)
         
         # Dynamic font sizing for plot
@@ -941,6 +972,9 @@ class DSPGui(tk.Tk):
         self._canvas = FigureCanvasTkAgg(self._fig, master=parent)
         self._canvas.draw()
         self._canvas.get_tk_widget().pack(fill="both", expand=True)
+        canvas_widget = self._canvas.get_tk_widget()
+        canvas_widget.configure(height=300)  # Set minimum height
+        canvas_widget.pack(fill="both", expand=True)
 
     def _update_cursors(self, f0, bw):
         """Update cursor positions and labels"""
