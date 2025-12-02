@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Optional, Callable
 import os
+FORCETOUCH=True
 
 # Optional plotting deps (Matplotlib preferred, with Tk fallback)
 try:
@@ -173,74 +174,61 @@ class ValueSlider(ttk.Frame):
         self.var.trace_add("write", self._on_value_change)
 
     def _create_slider_with_display(self, label):
-        # Top row: Label and value display
-        top_row = ttk.Frame(self)
-        top_row.pack(fill="x", pady=(0, 4))
-        
-        ttk.Label(top_row, text=label, style="Compact.TLabel").pack(side="left")
+       
+        row = ttk.Frame(self)
+        row.pack(fill="x", pady=(0, 2))
 
+        # Left-side label (e.g. "Center Frequency")
+        ttk.Label(row, text=label, style="Compact.TLabel").pack(side="left", padx=(0, 5))
+
+        # Left arrow
+        self.left_btn = ArrowButton(
+            row, direction="left", size=18,
+            command=lambda: self._nudge(-self.step)
+        )
+        self.left_btn.pack(side="left", padx=(0, 3))
+
+        # Min label
+        left_txt = f"{self.from_} {self.unit}"
+        self.range_start = ttk.Label(
+            row, text=left_txt, style="Range.TLabel"
+        )
+        self.range_start.pack(side="left", padx=(3, 3))
+
+        # Slider (expands)
+        self.scale = ttk.Scale(
+            row, from_=self.from_, to=self.to,
+            orient="horizontal", variable=self.var, command=self._on_slide
+        )
+        self.scale.pack(side="left", fill="x", expand=True, padx=3)
+
+        # Max label
+        right_txt = f"{self.to} {self.unit}"
+        self.range_end = ttk.Label(
+            row, text=right_txt, style="Range.TLabel"
+        )
+        self.range_end.pack(side="left", padx=(3, 3))
+
+        # Right arrow
+        self.right_btn = ArrowButton(
+            row, direction="right", size=18,
+            command=lambda: self._nudge(+self.step)
+        )
+        self.right_btn.pack(side="left", padx=(3, 3))
+
+        # Value display on far right
         max_text = f"{self.to} {self.unit}"
         disp_chars = max(8, len(max_text) + 1)
 
         self.value_display = ttk.Label(
-            top_row,
-            text="", 
-            style="ValueDisplay.TLabel", 
-            width=disp_chars, 
+            row,
+            text="",
+            style="ValueDisplay.TLabel",
+            width=disp_chars,
             anchor="center"
         )
-        self.value_display.pack(side="right")
-
-        # Arrow row (clean custom arrows)
-        arrow_row = ttk.Frame(self)
-        arrow_row.pack(fill="x", pady=(0, 2))
+        self.value_display.pack(side="left", padx=(5, 0))
         
-        self.left_btn = ArrowButton(
-            arrow_row, direction="left", size=20, command=lambda: self._nudge(-self.step)
-            )
-        self.left_btn.pack(side="left")
-        
-        ttk.Label(arrow_row, text="").pack(side="left", expand=True)  # spacer
-        
-        self.right_btn = ArrowButton(
-            arrow_row, direction="right", size=20, command=lambda: self._nudge(+self.step)
-            )
-        self.right_btn.pack(side="right")
-
-
-        # Slider row with range labels (unchanged)
-        slider_row = ttk.Frame(self)
-        slider_row.pack(fill="x", pady=(0, 2))
-
-        # Compute safe widths from the actual strings (prevents DPI truncation)
-        left_txt  = f"{self.from_} {self.unit}"   # e.g., "300 Hz"
-        right_txt = f"{self.to} {self.unit}"      # e.g., "3000 Hz"
-        left_chars  = max(7, len(left_txt)  + 1)  # breathing room
-        right_chars = max(7, len(right_txt) + 1)
-
-        # Left range label (anchor west so it hugs the slider nicely)
-        self.range_start = ttk.Label(
-            slider_row, text=left_txt, style="Range.TLabel",
-            width=left_chars, anchor="w", padding=(2, 0)
-            )
-        self.range_start.pack(side="left", padx=(0, 5))
-        
-        # Slider (expands to fill the middle)
-        self.scale = ttk.Scale(
-            slider_row, from_=self.from_, to=self.to,
-            orient="horizontal", variable=self.var, command=self._on_slide
-            )
-        self.scale.pack(side="left", fill="x", expand=True)
-        
-        # Right range label (anchor east)
-        self.range_end = ttk.Label(
-            slider_row, text=right_txt, style="Range.TLabel",
-            width=right_chars, anchor="e", padding=(2, 0)
-            )
-        self.range_end.pack(side="left", padx=(5, 0))
-
-        
-      
 
     def _nudge(self, delta: int):
        
@@ -354,8 +342,8 @@ class DSPGui(tk.Tk):
         self.title("DSP Audio Filter Control")
         
        
-        self.geometry("1000x700+50+50")  # Good balance for 50/50
-        self.minsize(900, 620)
+        self.geometry("800x480+50+50")  # Good balance for 50/50
+        self.minsize(800, 480)
         
         # Escape to exit fullscreen on touchscreen, close on laptop
         self.bind("<Escape>", self._on_escape)
@@ -375,7 +363,7 @@ class DSPGui(tk.Tk):
             # Smaller for touchscreen
             font_size = 9
             title_font_size = 16
-            plot_figsize = (5, 3.5)
+            plot_figsize = (4.2, 2.0)
         else:
             # Larger for laptop  
             font_size = 11
@@ -407,9 +395,9 @@ class DSPGui(tk.Tk):
         style.configure("Disabled.TButton", foreground="#999999")
 
         if self._is_touchscreen_mode():
-            style.configure("TButton", padding=(8, 5))
-            style.configure("Compact.TButton", padding=(6, 3))
-            style.configure("Preset.TButton", padding=(4, 2), font=("Segoe UI", 8))
+            style.configure("TButton", padding=(4, 1))
+            style.configure("Compact.TButton", padding=(4, 1))
+            style.configure("Preset.TButton", padding=(4, 1), font=("Segoe UI", 8))
         else:
             style.configure("TButton", padding=(8, 5))
             style.configure("Compact.TButton", padding=(6, 4))
@@ -432,10 +420,10 @@ class DSPGui(tk.Tk):
         main_container.pack(fill="both", expand=True, padx=5, pady=5)
 
         # Configure grid
-        main_container.columnconfigure(0, weight=1)
+        main_container.columnconfigure(0, weight=1, minsize=200)
         main_container.columnconfigure(1, weight=1)
-        main_container.rowconfigure(0, weight=2, minsize=280)
-        main_container.rowconfigure(1, weight=0, minsize=340)
+        main_container.rowconfigure(0, weight=1, minsize=220)
+        main_container.rowconfigure(1, weight=0, minsize=150)
 
         # Frames
         presets_frame = ttk.Frame(main_container)
@@ -452,8 +440,8 @@ class DSPGui(tk.Tk):
         
 
         # ---------------- PRESETS SECTION (top-left) ----------------
-        presets_label = ttk.Label(presets_frame, text="PRESETS", style="Big.TLabel")
-        presets_label.pack(anchor="w", pady=(0, 8))
+        #presets_label = ttk.Label(presets_frame, text="PRESETS", style="Big.TLabel")
+        #presets_label.pack(anchor="w", pady=(0, 8))
 
         presets_list_frame = ttk.Frame(presets_frame)
         presets_list_frame.pack(fill="x", pady=(0,8))
@@ -469,11 +457,11 @@ class DSPGui(tk.Tk):
 
         for name in preset_names:
             slot_frame = ttk.Frame(presets_list_frame)
-            slot_frame.pack(fill="x", pady=2)  # Reduced padding
+            slot_frame.pack(fill="x", pady=1)  # Reduced padding
             
             # Preset name label - fixed width for alignment
             name_label = ttk.Label(slot_frame, text=name, style="Compact.TLabel", 
-                                  width=10 if self._is_touchscreen_mode() else 12, 
+                                  width=8 if self._is_touchscreen_mode() else 12, 
                                   anchor="w")
             name_label.pack(side="left", padx=(0, 5))
             
@@ -532,7 +520,7 @@ class DSPGui(tk.Tk):
 
         # Quit button at bottom of presets frame - make sure it's visible
         quit_btn = ttk.Button(presets_frame, text="Quit", style="TButton", command=self._quit_app)
-        quit_btn.pack(side="bottom", pady=(15, 0), fill="x")
+        quit_btn.pack(side="bottom", pady=(4, 1), fill="x")
 
         # ---------------- Frequency response plot (top-right) ----------------
         plot_container = ttk.Frame(graph_frame)
@@ -548,7 +536,7 @@ class DSPGui(tk.Tk):
 
         # CF row with enhanced slider (bottom_frame)
         cf_frame = ttk.Frame(bottom_frame)
-        cf_frame.pack(fill="x", pady=(8, 2))
+        cf_frame.pack(fill="x", pady=(4, 1))
         self.cf_slider = ValueSlider(cf_frame, "Center Frequency", 200, 3500, 
                                    self._on_cf_change, "Hz")
         self.cf_slider.dynamic_step_callback = lambda v: 25 if v < 2000 else 50
@@ -557,7 +545,7 @@ class DSPGui(tk.Tk):
 
         # Bandwidth row with enhanced slider
         bw_frame = ttk.Frame(bottom_frame)
-        bw_frame.pack(fill="x", pady=(8, 2))
+        bw_frame.pack(fill="x", pady=(4, 1))
         self.bw_slider = ValueSlider(bw_frame, "Bandwidth", 200, 3500, 
                                    self._on_bw_change, "Hz")
         def bw_step(v):
@@ -572,9 +560,9 @@ class DSPGui(tk.Tk):
         self.bw_slider.pack(fill="x")
         self.bw_var = self.bw_slider.var
 
-        # Volume row
+        # Volume row + Mute
         vol_frame = ttk.Frame(bottom_frame)
-        vol_frame.pack(fill="x", pady=(8, 2))
+        vol_frame.pack(fill="x", pady=(4, 1))
         self.vol_slider = ValueSlider(vol_frame, "Volume", 0, 100, 
                                     self._on_vol_change, "%", is_percent=True)
         self.vol_slider.pack(fill="x")
@@ -588,7 +576,6 @@ class DSPGui(tk.Tk):
                             style="Mute.TButton", width=6, command=self._toggle_mute)
         self.mute_btn = mute_btn
 
-        # Repack value_display to ensure correct order: mute button on left, display on right
         self.vol_slider.value_display.pack_forget()
         self.vol_slider.value_display.pack(side="right")  # Then volume display
         mute_btn.pack(side="right", padx=(0, 5))  
@@ -625,6 +612,8 @@ class DSPGui(tk.Tk):
 
     def _is_touchscreen_mode(self):
         """Better detection for small touchscreen displays"""
+        if FORCETOUCH:
+            return True
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight()
         # Common small touchscreen resolutions
