@@ -587,7 +587,7 @@ class DSPGui(tk.Tk):
         #Update when using arrows to move slider.
         self.cf_slider.on_release = lambda: (self._apply_cf(self.cf_var.get()), self._schedule_plot())
         self.bw_slider.on_release = lambda: (self._apply_bw(self.bw_var.get()), self._schedule_plot())  
-        self.vol_slider.on_release = lambda: (self._apply_vol(self.vol_var.get() / 100.0), self._schedule_plot())
+        self.vol_slider.on_release = lambda: (self._apply_vol(self.vol_var.get() / 100.0))
 
         # Defaults
         self.cf_var.set(750)
