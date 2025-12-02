@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Optional, Callable
 import os
-FORCETOUCH=True
+
 
 # Optional plotting deps (Matplotlib preferred, with Tk fallback)
 try:
