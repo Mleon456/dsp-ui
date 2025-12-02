@@ -422,8 +422,8 @@ class DSPGui(tk.Tk):
         # Configure grid
         main_container.columnconfigure(0, weight=1, minsize=200)
         main_container.columnconfigure(1, weight=1)
-        main_container.rowconfigure(0, weight=1, minsize=220)
-        main_container.rowconfigure(1, weight=0, minsize=150)
+        main_container.rowconfigure(0, weight=1, minsize=200)
+        main_container.rowconfigure(1, weight=0, minsize=130)
 
         # Frames
         presets_frame = ttk.Frame(main_container)
@@ -536,7 +536,7 @@ class DSPGui(tk.Tk):
 
         # CF row with enhanced slider (bottom_frame)
         cf_frame = ttk.Frame(bottom_frame)
-        cf_frame.pack(fill="x", pady=(4, 1))
+        cf_frame.pack(fill="x", pady=(8, 2))
         self.cf_slider = ValueSlider(cf_frame, "Center Frequency", 200, 3500, 
                                    self._on_cf_change, "Hz")
         self.cf_slider.dynamic_step_callback = lambda v: 25 if v < 2000 else 50
@@ -545,7 +545,7 @@ class DSPGui(tk.Tk):
 
         # Bandwidth row with enhanced slider
         bw_frame = ttk.Frame(bottom_frame)
-        bw_frame.pack(fill="x", pady=(4, 1))
+        bw_frame.pack(fill="x", pady=(8, 2))
         self.bw_slider = ValueSlider(bw_frame, "Bandwidth", 200, 3500, 
                                    self._on_bw_change, "Hz")
         def bw_step(v):
@@ -562,7 +562,7 @@ class DSPGui(tk.Tk):
 
         # Volume row + Mute
         vol_frame = ttk.Frame(bottom_frame)
-        vol_frame.pack(fill="x", pady=(4, 1))
+        vol_frame.pack(fill="x", pady=(8, 2))
         self.vol_slider = ValueSlider(vol_frame, "Volume", 0, 100, 
                                     self._on_vol_change, "%", is_percent=True)
         self.vol_slider.pack(fill="x")
@@ -582,7 +582,7 @@ class DSPGui(tk.Tk):
         # Update on slider release instead of continuously
         self.cf_slider.scale.bind("<ButtonRelease-1>", lambda e: self._apply_cf(self.cf_var.get()) or self._schedule_plot())
         self.bw_slider.scale.bind("<ButtonRelease-1>", lambda e: self._apply_bw(self.bw_var.get()) or self._schedule_plot())
-        self.vol_slider.scale.bind("<ButtonRelease-1>", lambda e: self._apply_vol(self.vol_var.get() / 100.0) or self._schedule_plot())
+        self.vol_slider.scale.bind("<ButtonRelease-1>", lambda e: self._apply_vol(self.vol_var.get() / 100.0))
 
         #Update when using arrows to move slider.
         self.cf_slider.on_release = lambda: (self._apply_cf(self.cf_var.get()), self._schedule_plot())
