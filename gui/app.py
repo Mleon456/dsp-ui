@@ -590,8 +590,8 @@ class DSPGui(tk.Tk):
         self.vol_slider.on_release = lambda: (self._apply_vol(self.vol_var.get() / 100.0))
 
         # Defaults
-        self.cf_var.set(750)
-        self.bw_var.set(1200)
+        self.cf_var.set(1500)
+        self.bw_var.set(2400)
         self.vol_var.set(60)
 
         # Initial state update for DSP/BYPASS
@@ -801,9 +801,9 @@ class DSPGui(tk.Tk):
     def _update_dsp_bypass_state(self, dsp_on: bool):
         """Update UI elements based on DSP/BYPASS state"""
         # Update slider states - enable sliders only in DSP mode
-        self.cf_slider.set_state(dsp_on)
-        self.bw_slider.set_state(dsp_on)
-        self.vol_slider.set_state(dsp_on)
+        self.cf_slider.set_state(True)
+        self.bw_slider.set_state(True)
+        self.vol_slider.set_state(True)
         
         # Update DSP/BYPASS label appearance
         if dsp_on:
@@ -852,22 +852,11 @@ class DSPGui(tk.Tk):
         except Exception: pass
 
     def _apply_bw(self, hz: int):
-        used = False
-        if hasattr(self.hw, "set_bandwidth"):
-            try:
-                self.hw.set_bandwidth(hz)
-                used = True
-            except Exception:
-                used = False
-        if not used and hasattr(self.hw, "set_bandwidth"):
-            mode = "narrow" if hz < 900 else ("medium" if hz < 1800 else "wide")
-            try:
-                self.hw.set_bandwidth(mode)
-                used = True
-            except Exception:
-                pass
+        try: self.hw.set_bandwidth(hz)
+        except Exception: pass
         try: self.bus.publish("bandwidth_hz", hz)
         except Exception: pass
+        
 
     def _apply_vol(self, pct: float):
         try: self.hw.set_volume(pct)

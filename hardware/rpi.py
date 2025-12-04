@@ -1,25 +1,11 @@
-# Description:
-# This class represents the hardware controller layer for our
-# DSP filter system. It is a bridge layer between GUI events
-# and hardware control. Each method responds to one GUI control. 
-# The class will translate those calls in to real GPIO/I2C/SPI 
-# commands to control the VBFM
-
-# TODO:
-# We need to decide:
-#       * Which GPIO pins/ SPI/I2C channels map to CF, bandwidth, bypass, volume, etc.
-#       * How to represent those values 
-#           - raw binary codes? 
-#           - percentages?
-#           - register writes?
-# GUI -> EventBus -> RPIHW -> hardware pins
 from .base import HardwareController, LevelCallback
 import sys
 import time
 import RPi.GPIO as GPIO
 import spidev
+import threading
 
-# Fill in with real GPIO/SPI/I2C logic
+
 class RPiHW(HardwareController):
     
     ENC_A = 17      # to RC6
@@ -94,9 +80,9 @@ class RPiHW(HardwareController):
 
     # Called when user flips the DSP toggle
     def set_bypass(self, on: bool) -> None:
-        self.bypass_state = state
-        GPIO.output(self.BYPASS, GPIO.HIGH if state else GPIO.LOW)
-        print(f"Bypass {'ENABLED' if state else 'DISABLED'}.")
+        self.bypass_state = on
+        GPIO.output(self.BYPASS, GPIO.HIGH if on else GPIO.LOW)
+        print(f"Bypass {'ENABLED' if on else 'DISABLED'}.")
         pass
     def toggle_bypass(self):
         self.set_bypass(not self.bypass_state)
@@ -111,10 +97,9 @@ class RPiHW(HardwareController):
         print(f"Volume set to {value}/255")
 
 
-    def set_volume(self, pct: float) -> None:
+    def set_volume(self, value):
+        """Public setter for volume."""
         self.set_wiper(value)
-        pass
-
 
     
     def toggle_mode(self):
@@ -180,5 +165,33 @@ class RPiHW(HardwareController):
         print(f"Bandwidth now: {self.bandwidth} Hz")
 
     def set_level_callback(self, cb: LevelCallback) -> None:
+        """Start background polling of the LED_OVER pin and call cb(level_pct)."""
         self._level_cb = cb
-        # TODO: start ADC polling thread and call cb(level_pct)
+        self._stop_meter = False
+
+        # Start a background thread for reading LED_OVER
+        t = threading.Thread(target=self._poll_overload_led, daemon=True)
+        t.start()
+    def _poll_overload_led(self):
+        """Continuously read GPIO 23 and send level percentage to GUI."""
+        LED_PIN = self.LED_OVER
+
+        while not getattr(self, "_stop_meter", False):
+            try:
+                # Read GPIO 23
+                raw = GPIO.input(LED_PIN)
+
+                # Convert to level percentage
+                # If LED_ON = high → treat as overload = 100%
+                level_pct = 1.0 if raw == GPIO.HIGH else 0.0
+
+                # Send to GUI
+                if self._level_cb:
+                    self._level_cb(level_pct)
+            except Exception as e:
+                print("Level meter error:", e)
+
+            time.sleep(0.05)  # 20 Hz update rate (smooth)
+    def stop(self):
+        """Stop all background polling threads."""
+        self._stop_meter = True

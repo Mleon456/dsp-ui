@@ -4,6 +4,6 @@ from hardware.rpi import RPiHW   # swap to: from hardware.rpi import RPiHW
 
 if __name__ == "__main__":
     bus = EventBus()
-    hw = MockHW()  # replace with RPiHW() when ready
+    hw = RPiHW()  # replace with RPiHW() when ready
     app = DSPGui(hw, bus)  
     app.mainloop()
