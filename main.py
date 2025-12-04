@@ -1,6 +1,6 @@
 from eventbus import EventBus
 from gui.app import DSPGui
-from hardware.mock import MockHW   # swap to: from hardware.rpi import RPiHW
+from hardware.rpi import RPiHW   # swap to: from hardware.rpi import RPiHW
 
 if __name__ == "__main__":
     bus = EventBus()

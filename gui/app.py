@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Optional, Callable
 import os
-
+FORCETOUCH=True
 
 # Optional plotting deps (Matplotlib preferred, with Tk fallback)
 try:
@@ -183,7 +183,7 @@ class ValueSlider(ttk.Frame):
 
         # Left arrow
         self.left_btn = ArrowButton(
-            row, direction="left", size=18,
+            row, direction="left", size=28,
             command=lambda: self._nudge(-self.step)
         )
         self.left_btn.pack(side="left", padx=(0, 3))
@@ -211,7 +211,7 @@ class ValueSlider(ttk.Frame):
 
         # Right arrow
         self.right_btn = ArrowButton(
-            row, direction="right", size=18,
+            row, direction="right", size=28,
             command=lambda: self._nudge(+self.step)
         )
         self.right_btn.pack(side="left", padx=(3, 3))
@@ -420,10 +420,10 @@ class DSPGui(tk.Tk):
         main_container.pack(fill="both", expand=True, padx=5, pady=5)
 
         # Configure grid
-        main_container.columnconfigure(0, weight=1, minsize=200)
+        main_container.columnconfigure(0, weight=1, minsize=300)
         main_container.columnconfigure(1, weight=1)
         main_container.rowconfigure(0, weight=1, minsize=200)
-        main_container.rowconfigure(1, weight=0, minsize=130)
+        main_container.rowconfigure(1, weight=0, minsize=200)
 
         # Frames
         presets_frame = ttk.Frame(main_container)
@@ -859,10 +859,10 @@ class DSPGui(tk.Tk):
                 used = True
             except Exception:
                 used = False
-        if not used and hasattr(self.hw, "set_bandwidth_mode"):
+        if not used and hasattr(self.hw, "set_bandwidth"):
             mode = "narrow" if hz < 900 else ("medium" if hz < 1800 else "wide")
             try:
-                self.hw.set_bandwidth_mode(mode)
+                self.hw.set_bandwidth(mode)
                 used = True
             except Exception:
                 pass
