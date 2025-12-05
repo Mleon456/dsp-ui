@@ -20,7 +20,7 @@ class RPiHW(HardwareController):
     GRAY_SEQ = [
         (0, 0),
         (0, 1),
-        (1, 1),
+        (1, 1), 
         (1, 0),
     ]
     def __init__(self) -> None:
