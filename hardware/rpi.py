@@ -26,7 +26,7 @@ class RPiHW(HardwareController):
     def __init__(self) -> None:
         self._level_cb: LevelCallback | None = None
         
-
+        GPIO.setmode(GPIO.BCM)
         # Setup encoder pins as outputs
         GPIO.setup(self.ENC_A, GPIO.OUT, initial=GPIO.LOW)
         GPIO.setup(self.ENC_B, GPIO.OUT, initial=GPIO.LOW)
@@ -82,7 +82,7 @@ class RPiHW(HardwareController):
     def set_bypass(self, on: bool) -> None:
         self.bypass_state = on
         GPIO.output(self.BYPASS, GPIO.HIGH if on else GPIO.LOW)
-        print(f"Bypass {'ENABLED' if on else 'DISABLED'}.")
+        print(f"Bypass {'Disabled' if on else 'Enabled'}.")
         pass
     def toggle_bypass(self):
         self.set_bypass(not self.bypass_state)
