@@ -8,6 +8,7 @@ class ToggleSwitch(ttk.Frame):
         self.radius, self.pad = height // 2, 2
         self.value = value or tk.BooleanVar(value=True)
         self.command = command
+        self.on_toggle = None  # ← Add this attribute
         self.canvas = tk.Canvas(self, width=width, height=height, highlightthickness=0)
         self.canvas.pack()
         for seq in ("<Button-1>", "<space>", "<Return>"):
@@ -15,13 +16,26 @@ class ToggleSwitch(ttk.Frame):
         self.canvas.configure(cursor="hand2")
         self._draw()
 
-    def get(self) -> bool: return bool(self.value.get())
+    def get(self) -> bool: 
+        return bool(self.value.get())
+    
     def set(self, state: bool):
         self.value.set(bool(state))
         self._draw()
-        if self.command: self.command()
-    def toggle(self): self.set(not self.get())
-    def _on_click(self, _): self.toggle()
+        # Don't call callbacks when programmatically setting
+        
+    def toggle(self): 
+        new_state = not self.get()
+        self.value.set(new_state)
+        self._draw()
+        # Call callbacks when user toggles
+        if self.command: 
+            self.command()
+        if callable(self.on_toggle):  # ← Call on_toggle if it exists
+            self.on_toggle(new_state)
+            
+    def _on_click(self, _): 
+        self.toggle()
 
     def _draw(self):
         c, w, h, r, p = self.canvas, self.width, self.height, self.radius, self.pad

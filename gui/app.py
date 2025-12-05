@@ -268,8 +268,8 @@ class ValueSlider(ttk.Frame):
     def _on_value_change(self, *args):
         current_val = self.var.get()
         self._update_display(current_val)
-        if self.command:
-            self.command(str(current_val))
+        #if self.command:
+         #   self.command(str(current_val))
 
     def _update_display(self, value):
         display_text = f"{value} {self.unit}"
@@ -298,8 +298,8 @@ class ValueSlider(ttk.Frame):
 
         if not enabled:
             self.value_display.configure(foreground="#666666", background="#e0e0e0")
-            self.range_start.configure(foreground="#999999")
-            self.range_end.configure(foreground="#999999")
+            self.range_start.configure(foreground="#000000")
+            self.range_end.configure(foreground="#000000")
         else:
             value = self.var.get()
             if not self.is_percent:
@@ -309,22 +309,22 @@ class ValueSlider(ttk.Frame):
                     self.value_display.configure(foreground="#4ECDC4", background="#2c2c2c")
                 else:
                     self.value_display.configure(foreground="#2E86AB", background="#2c2c2c")
-            self.range_start.configure(foreground="#666666")
-            self.range_end.configure(foreground="#666666")
+            self.range_start.configure(foreground="#000000")
+            self.range_end.configure(foreground="#000000")
 
 
 class PresetManager:
     def __init__(self):
         # Enhanced preset system with auto-save capability
         self.presets = {
-            "Custom 1": {"cf": 1000, "bw": 500, "vol": 60},
-            "Custom 2": {"cf": 1500, "bw": 800, "vol": 60},
-            "Custom 3": {"cf": 2000, "bw": 600, "vol": 60}
+            "Custom 1": {"cf": 1000, "bw": 500},
+            "Custom 2": {"cf": 1500, "bw": 800},
+            "Custom 3": {"cf": 2000, "bw": 600}
         }
     
-    def save_current_settings(self, preset_name: str, cf: int, bw: int, vol: int):
+    def save_current_settings(self, preset_name: str, cf: int, bw: int):
         """Save current GUI settings to a preset"""
-        self.presets[preset_name] = {"cf": cf, "bw": bw, "vol": vol}
+        self.presets[preset_name] = {"cf": cf, "bw": bw}
     
     def get_preset(self, preset_name: str):
         """Get preset values"""
@@ -377,8 +377,8 @@ class DSPGui(tk.Tk):
         style.configure("Title.TLabel", font=("Segoe UI", title_font_size, "bold"))
         style.configure("Big.TLabel", font=("Segoe UI", font_size))
         style.configure("Compact.TLabel", font=("Segoe UI", font_size-1), padding=(0,2))
-        style.configure("Range.TLabel", font=("Segoe UI", font_size-1),
-                foreground="#666666", padding=(2, 1))
+        style.configure("Range.TLabel", font=("Segoe UI", font_size+1),
+                foreground="#000000", padding=(2, 1))
         style.configure("ValueDisplay.TLabel",
                         font=("Segoe UI", font_size, "bold"), 
                        background="#2c2c2c", 
@@ -512,7 +512,7 @@ class DSPGui(tk.Tk):
 
         self.bypass_switch = ToggleSwitch(toggle_row, width=60, height=28)
         self.bypass_switch.pack(side="left")
-        self.bypass_switch.set(False)  # DSP ON by default
+        self.bypass_switch.set(True)  # DSP ON by default
         self.bypass_switch.on_toggle = self._on_dsp_toggled
 
         self.dsp_label = ttk.Label(toggle_row, text="DSP", style="Big.TLabel")
@@ -538,7 +538,7 @@ class DSPGui(tk.Tk):
         cf_frame = ttk.Frame(bottom_frame)
         cf_frame.pack(fill="x", pady=(8, 2))
         self.cf_slider = ValueSlider(cf_frame, "Center Frequency", 200, 3500, 
-                                   self._on_cf_change, "Hz")
+                                    "Hz")
         self.cf_slider.dynamic_step_callback = lambda v: 25 if v < 2000 else 50
         self.cf_slider.pack(fill="x")
         self.cf_var = self.cf_slider.var
@@ -547,7 +547,7 @@ class DSPGui(tk.Tk):
         bw_frame = ttk.Frame(bottom_frame)
         bw_frame.pack(fill="x", pady=(8, 2))
         self.bw_slider = ValueSlider(bw_frame, "Bandwidth", 200, 3500, 
-                                   self._on_bw_change, "Hz")
+                                    "Hz")
         def bw_step(v):
             if v < 400:
                 return 20
@@ -564,11 +564,11 @@ class DSPGui(tk.Tk):
         vol_frame = ttk.Frame(bottom_frame)
         vol_frame.pack(fill="x", pady=(8, 2))
         self.vol_slider = ValueSlider(vol_frame, "Volume", 0, 100, 
-                                    self._on_vol_change, "%", is_percent=True)
+                                     "%",unit="%", is_percent=True)
         self.vol_slider.pack(fill="x")
         self.vol_var = self.vol_slider.var
 
-        self._pre_mute_volume = 60
+        self._pre_mute_volume = 50
         self._is_muted = False
 
         top_row = self.vol_slider.value_display.master  # This is the top_row frame inside ValueSlider
@@ -582,17 +582,17 @@ class DSPGui(tk.Tk):
         # Update on slider release instead of continuously
         self.cf_slider.scale.bind("<ButtonRelease-1>", lambda e: self._apply_cf(self.cf_var.get()) or self._schedule_plot())
         self.bw_slider.scale.bind("<ButtonRelease-1>", lambda e: self._apply_bw(self.bw_var.get()) or self._schedule_plot())
-        self.vol_slider.scale.bind("<ButtonRelease-1>", lambda e: self._apply_vol(self.vol_var.get() / 100.0))
+        self.vol_slider.scale.bind("<ButtonRelease-1>", lambda e: self._apply_vol(int(round((self.vol_var.get() / 100.0)*255))))
 
         #Update when using arrows to move slider.
         self.cf_slider.on_release = lambda: (self._apply_cf(self.cf_var.get()), self._schedule_plot())
         self.bw_slider.on_release = lambda: (self._apply_bw(self.bw_var.get()), self._schedule_plot())  
-        self.vol_slider.on_release = lambda: (self._apply_vol(self.vol_var.get() / 100.0))
+        self.vol_slider.on_release = lambda: (self._apply_vol(int(round((self.vol_var.get() / 100.0)*255))))
 
         # Defaults
         self.cf_var.set(1500)
         self.bw_var.set(2400)
-        self.vol_var.set(60)
+        self.vol_var.set(50)
 
         # Initial state update for DSP/BYPASS
         self._update_dsp_bypass_state(True)  # Start with DSP on
@@ -604,10 +604,10 @@ class DSPGui(tk.Tk):
             pass
 
         # Push initial values to hardware/bus and plot
-        self._apply_cf(self.cf_var.get())
-        self._apply_bw(self.bw_var.get())
-        self._apply_vol(self.vol_var.get() / 100.0)
-        self._apply_bypass(False)  # DSP on (not bypassed)
+        #self._apply_cf(self.cf_var.get())
+        #self._apply_bw(self.bw_var.get())
+        #self._apply_vol(int(round((self.vol_var.get() / 100.0) * 255)))
+        self._apply_bypass(True)  # DSP on (not bypassed)
         self._update_plot()
 
     def _is_touchscreen_mode(self):
@@ -652,7 +652,7 @@ class DSPGui(tk.Tk):
             self.vol_slider.set(preset["vol"])
             self._apply_cf(preset["cf"])
             self._apply_bw(preset["bw"])
-            self._apply_vol(preset["vol"] / 100.0)
+            self._apply_vol(int(round((preset["vol"] / 100.0)*255)))
             self._schedule_plot()
 
     def _edit_preset(self, name):
@@ -773,7 +773,7 @@ class DSPGui(tk.Tk):
                 new_presets[new_name] = {
                     "cf": vars["cf"].get(), 
                     "bw": vars["bw"].get(),
-                    "vol": 60  # Default volume
+                    "vol": 50  # Default volume
                 }
                 if new_name != old_name:
                     name_changes[old_name] = new_name
@@ -795,7 +795,7 @@ class DSPGui(tk.Tk):
 
         # The toggle switch returns True when DSP is active (toggle to the right)
         # and False when BYPASS is active (toggle to the left)
-        self._apply_bypass(not dsp_on)  # Send bypass=True when DSP is off
+        self._apply_bypass(dsp_on)  # Send bypass=True when DSP is off
         self._update_dsp_bypass_state(dsp_on)
 
     def _update_dsp_bypass_state(self, dsp_on: bool):
@@ -820,30 +820,19 @@ class DSPGui(tk.Tk):
         if self._is_muted:
             # Unmute - restore previous volume
             self.vol_var.set(self._pre_mute_volume)
-            self._apply_vol(self._pre_mute_volume / 100.0)
+            self._apply_vol(int(round((self._pre_mute_volume / 100.0)*255)))
             self.mute_btn.configure(style="Mute.TButton")
             self._is_muted = False
         else:
             # Mute - save current volume and set to 0
             self._pre_mute_volume = self.vol_var.get()
             self.vol_var.set(0)
-            self._apply_vol(0.0)
+            self._apply_vol(int(0))
             self.mute_btn.configure(style="MuteActive.TButton")
             self._is_muted = True
         #self._schedule_plot()
 
-    # ---------------- Slider handlers (debounced) ----------------
-    def _on_cf_change(self, _s: str):
-        if self._cf_after_id: self.after_cancel(self._cf_after_id)
-        self._cf_after_id = self.after(120, lambda: None)
-
-    def _on_bw_change(self, _s: str):
-        if self._bw_after_id: self.after_cancel(self._bw_after_id)
-        self._bw_after_id = self.after(120, lambda: None)
-    def _on_vol_change(self, _s: str):
-        if self._vol_after_id: self.after_cancel(self._vol_after_id)
-        self._vol_after_id = self.after(120, lambda: None)
-
+   
     # ---------------- Apply to HW + publish ----------------
     def _apply_cf(self, hz: int):
         try: self.hw.set_center_frequency(hz)
@@ -858,10 +847,10 @@ class DSPGui(tk.Tk):
         except Exception: pass
         
 
-    def _apply_vol(self, pct: float):
+    def _apply_vol(self, pct: int):
         try: self.hw.set_volume(pct)
         except Exception: pass
-        try: self.bus.publish("volume_pct", pct)
+        try: self.bus.publish("volume_255", pct)
         except Exception: pass
 
     def _apply_bypass(self, on: bool):
@@ -935,15 +924,15 @@ class DSPGui(tk.Tk):
         self._line, = self._ax.plot([], [], linewidth=2.5)
         
         # Add cursors and labels
-        self.cf_cursor = self._ax.axvline(x=750, color='red', linestyle='--', alpha=0.8, linewidth=2)
-        self.bw_low_cursor = self._ax.axvline(x=600, color='orange', linestyle=':', alpha=0.7, linewidth=1.5)
-        self.bw_high_cursor = self._ax.axvline(x=900, color='orange', linestyle=':', alpha=0.7, linewidth=1.5)
+        #self.cf_cursor = self._ax.axvline(x=750, color='red', linestyle='--', alpha=0.8, linewidth=2)
+        self.bw_low_cursor = self._ax.axvline(x=600, color='red', linestyle=':', alpha=0.7, linewidth=1.5)
+        self.bw_high_cursor = self._ax.axvline(x=900, color='red', linestyle=':', alpha=0.7, linewidth=1.5)
         
         text_font_size = 10 if self._is_touchscreen_mode() else 12
-        self.cf_text = self._ax.text(0.02, 0.98, 'CF: 750 Hz', transform=self._ax.transAxes, 
-                                    verticalalignment='top', fontsize=text_font_size, 
-                                    bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.9))
-        self.bw_text = self._ax.text(0.02, 0.85, 'BW: 300 Hz', transform=self._ax.transAxes,
+        #self.cf_text = self._ax.text(0.02, 0.98, 'CF: 750 Hz', transform=self._ax.transAxes, 
+                                   # verticalalignment='top', fontsize=text_font_size, 
+                                    #bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.9))
+        self.bw_text = self._ax.text(0.35, 1, 'BW: 300 Hz', transform=self._ax.transAxes,
                                     verticalalignment='top', fontsize=text_font_size-1, 
                                     bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.9))
 
@@ -959,26 +948,26 @@ class DSPGui(tk.Tk):
         low_freq = max(200, f0 - bw/2)
         high_freq = min(3500, f0 + bw/2)
         
-        self.cf_cursor.set_xdata([f0, f0])
+        #self.cf_cursor.set_xdata([f0, f0])
         self.bw_low_cursor.set_xdata([low_freq, low_freq])
         self.bw_high_cursor.set_xdata([high_freq, high_freq])
         
-        self.cf_text.set_text(f'CF: {f0} Hz')
-        self.bw_text.set_text(f'BW: {bw} Hz\nRange: {low_freq:.0f}-{high_freq:.0f} Hz')
+        #self.cf_text.set_text(f'CF: {f0} Hz')
+        self.bw_text.set_text(f'Bandpass: {low_freq:.0f}-{high_freq:.0f} Hz')
 
     def _update_plot(self):
         f0 = float(self.cf_var.get())
         bw = float(self.bw_var.get())
-        vol = float(self.vol_var.get()) / 100.0
+        #vol = float(self.vol_var.get()) / 100.0
         
         try:
             if scipy is not None and np is not None:
                 freqs, mags = self._butterworth_response(f0, bw)
-                db = 20.0 * np.log10(np.clip(mags * vol, 1e-6, None))
+                db = 20.0 * np.log10(np.clip(mags, 1e-6, None))
             else:
                 # Fallback to original method
                 freqs = np.linspace(self._fmin, self._fmax, 600)
-                mags = np.array([self._bp_mag(float(f), f0, bw) for f in freqs]) * max(1e-6, vol)
+                mags = np.array([self._bp_mag(float(f), f0, bw) for f in freqs])
                 db = 20.0 * np.log10(np.clip(mags, 1e-6, None))
             
             if self._use_mpl:
