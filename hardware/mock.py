@@ -8,14 +8,14 @@ class MockHW(HardwareController):
         threading.Thread(target=self._pump, daemon=True).start()
 
     def set_center_frequency(self, hz: int) -> None: print(f"[MOCK] CF {hz}")
-    def set_bandwidth_mode(self, mode: str) -> None: print(f"[MOCK] BW {mode}")
+    def set_bandwidth(self, mode: str) -> None: print(f"[MOCK] BW {mode}")
     def set_bypass(self, on: bool) -> None: print(f"[MOCK] DSP {'ON' if on else 'BYPASS'}")
-    def set_volume(self, pct: float) -> None: print(f"[MOCK] VOL {pct:.1f}")
+    def set_volume(self, pct: int) -> None: print(f"[MOCK] VOL {pct:.1f}")
     def set_multi(self, pct: float) -> None: print(f"[MOCK] MULTI {pct:.1f}")
 
     def set_level_callback(self, cb: LevelCallback) -> None:
-        self._cb = cb
-
+        #self._cb = cb
+        pass
     def _pump(self):
         # fake a sine-wave level so the meter moves
         while not self._stop:
