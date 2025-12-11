@@ -4,6 +4,7 @@ import math
 import tkinter as tk
 from tkinter import ttk
 from typing import Optional, Callable
+import json
 import os
 FORCETOUCH=True
 
@@ -77,7 +78,7 @@ class Led(tk.Canvas):
 # --- Slider with attached value display + arrow nudges ---
 class ArrowButton(tk.Canvas):
     """Minimal, crisp arrow button drawn on a canvas."""
-    def __init__(self, master, direction="left", command=None, size=20, **kw):
+    def __init__(self, master, direction="left", command=None, size=5, **kw):
         super().__init__(master, width=size, height=size,
                          highlightthickness=0, bd=0, **kw)
 
@@ -174,61 +175,62 @@ class ValueSlider(ttk.Frame):
         self.var.trace_add("write", self._on_value_change)
 
     def _create_slider_with_display(self, label):
-       
         row = ttk.Frame(self)
         row.pack(fill="x", pady=(0, 2))
 
-        # Left-side label (e.g. "Center Frequency")
-        ttk.Label(row, text=label, style="Compact.TLabel").pack(side="left", padx=(0, 5))
+        # Use grid for perfect alignment across sliders
+        row.columnconfigure(0, minsize=130)
+        row.columnconfigure(2, minsize=60)
+        row.columnconfigure(3, weight=1)  # slider expands properly
+        row.columnconfigure(4, minsize=60)
 
-        # Left arrow
+        # Column 0: Label
+        ttk.Label(row, text=label, style="Compact.TLabel") \
+            .grid(row=0, column=0, padx=(0, 5), sticky="w")
+
+        # Column 1: Left arrow
         self.left_btn = ArrowButton(
-            row, direction="left", size=28,
+            row, direction="left", size=50,
             command=lambda: self._nudge(-self.step)
         )
-        self.left_btn.pack(side="left", padx=(0, 3))
+        self.left_btn.grid(row=0, column=1, padx=3)
 
-        # Min label
-        left_txt = f"{self.from_} {self.unit}"
+        # Column 2: Min label
         self.range_start = ttk.Label(
-            row, text=left_txt, style="Range.TLabel"
+            row, text=f"{self.from_} {self.unit}", style="Range.TLabel"
         )
-        self.range_start.pack(side="left", padx=(3, 3))
+        self.range_start.grid(row=0, column=2, padx=3)
 
-        # Slider (expands)
+        # Column 3: Slider
         self.scale = ttk.Scale(
             row, from_=self.from_, to=self.to,
             orient="horizontal", variable=self.var, command=self._on_slide
         )
-        self.scale.pack(side="left", fill="x", expand=True, padx=3)
+        self.scale.grid(row=0, column=3, padx=5, sticky="ew")
 
-        # Max label
-        right_txt = f"{self.to} {self.unit}"
+        # Column 4: Max label
         self.range_end = ttk.Label(
-            row, text=right_txt, style="Range.TLabel"
+            row, text=f"{self.to} {self.unit}", style="Range.TLabel"
         )
-        self.range_end.pack(side="left", padx=(3, 3))
+        self.range_end.grid(row=0, column=4, padx=3)
 
-        # Right arrow
+        # Column 5: Right arrow
         self.right_btn = ArrowButton(
-            row, direction="right", size=28,
+            row, direction="right", size=50,
             command=lambda: self._nudge(+self.step)
         )
-        self.right_btn.pack(side="left", padx=(3, 3))
+        self.right_btn.grid(row=0, column=5, padx=3)
 
-        # Value display on far right
+        # Column 6: Value display
         max_text = f"{self.to} {self.unit}"
         disp_chars = max(8, len(max_text) + 1)
-
         self.value_display = ttk.Label(
-            row,
-            text="",
-            style="ValueDisplay.TLabel",
-            width=disp_chars,
-            anchor="center"
+            row, text="", style="ValueDisplay.TLabel",
+            width=disp_chars, anchor="center"
         )
-        self.value_display.pack(side="left", padx=(5, 0))
-        
+        self.value_display.grid(row=0, column=6, padx=(6, 0))
+
+            
 
     def _nudge(self, delta: int):
        
@@ -313,22 +315,49 @@ class ValueSlider(ttk.Frame):
             self.range_end.configure(foreground="#000000")
 
 
+
+
 class PresetManager:
-    def __init__(self):
-        # Enhanced preset system with auto-save capability
-        self.presets = {
+    def __init__(self, path="presets.json"):
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Store presets.json inside the same directory
+        self.path = os.path.join(base_dir, "presets.json")
+
+        # Load existing presets if file exists
+        if os.path.exists(self.path):
+            try:
+                with open(self.path, "r") as f:
+                    self.presets = json.load(f)
+            except Exception:
+                self.presets = self._default_presets()
+        else:
+            # Start with defaults and immediately save them
+            self.presets = self._default_presets()
+            self._save_file()
+
+    def _default_presets(self):
+        return {
             "Custom 1": {"cf": 1000, "bw": 500},
             "Custom 2": {"cf": 1500, "bw": 800},
             "Custom 3": {"cf": 2000, "bw": 600}
         }
-    
+
+    def _save_file(self):
+        try:
+            with open(self.path, "w") as f:
+                json.dump(self.presets, f, indent=4)
+        except Exception as e:
+            print("Failed to save presets:", e)
+
     def save_current_settings(self, preset_name: str, cf: int, bw: int):
-        """Save current GUI settings to a preset"""
+        """Update preset in memory and save to disk"""
         self.presets[preset_name] = {"cf": cf, "bw": bw}
-    
+        self._save_file()
+
     def get_preset(self, preset_name: str):
-        """Get preset values"""
         return self.presets.get(preset_name)
+
 
 
 
@@ -351,19 +380,47 @@ class DSPGui(tk.Tk):
         # ---------------- Styling ----------------
         self.configure(padx=10, pady=10)
         style = ttk.Style(self)
-        try:
-            style.theme_use("vista" if sys.platform.startswith("win") else "clam")
-        except Exception:
-            pass
-        
-        
-        
+        #try:
+        #    style.theme_use("vista" if sys.platform.startswith("win") else "clam")
+        #except Exception:
+        #    pass
+        style.theme_use("clam")
+        # ---- Large slider knob for Linux / RPi ----
+        knob_color = "#4aa3ff"   # ← change this to any color you want
+        big_knob = tk.PhotoImage(width=40, height=40)
+        big_knob.put((knob_color,), to=(0,0,39,39))
+
+        # Replace the *actual* slider element used by clam
+        style.element_create(
+            "scale.slider",  # must match clam’s internal element name
+            "image", big_knob,
+            sticky="",
+            border=0
+        )
+
+        # Rebuild the layout so Tk uses our custom slider element
+        style.layout("Large.Horizontal.TScale", [
+            ("Horizontal.Scale.trough", {
+                "sticky": "we",
+                "children": [
+                    ("Horizontal.Scale.track", {"sticky": "we"}),
+                    ("scale.slider", {"side": "left", "sticky": ""})  # ref to our replacement
+                ]
+            })
+        ])
+
+        # Make the trough visible
+        style.configure("Horizontal.Scale.trough", background="#666666")
+
+        # keep reference so GC does not delete knob image
+        self.big_knob = big_knob
+
         # Dynamic font sizing based on screen size
         if self._is_touchscreen_mode():
             # Smaller for touchscreen
             font_size = 9
             title_font_size = 16
-            plot_figsize = (4.2, 2.0)
+            plot_figsize = (5, 3)
         else:
             # Larger for laptop  
             font_size = 11
@@ -375,29 +432,45 @@ class DSPGui(tk.Tk):
 
         # Apply styles
         style.configure("Title.TLabel", font=("Segoe UI", title_font_size, "bold"))
-        style.configure("Big.TLabel", font=("Segoe UI", font_size))
-        style.configure("Compact.TLabel", font=("Segoe UI", font_size-1), padding=(0,2))
+        style.configure("Big.TLabel", font=("Segoe UI", font_size+3))
+        style.configure("Compact.TLabel", font=("Segoe UI", font_size+3), padding=(0,2))
         style.configure("Range.TLabel", font=("Segoe UI", font_size+1),
                 foreground="#000000", padding=(2, 1))
         style.configure("ValueDisplay.TLabel",
-                        font=("Segoe UI", font_size, "bold"), 
+                        font=("Segoe UI", font_size+1, "bold"), 
                        background="#2c2c2c", 
                        foreground="white", 
                        relief="raised", 
                        borderwidth=1, 
                        padding=(6, 3),
                        )
-        style.configure("Mute.TButton", padding=(8, 3), font=("Segoe UI", font_size-1))
-        style.configure("MuteActive.TButton", padding=(8, 3), font=("Segoe UI", font_size-1),
-                background="#ff6b6b", foreground="black")
         # New style for disabled state
         style.configure("Disabled.TLabel", foreground="#999999")
         style.configure("Disabled.TButton", foreground="#999999")
+        style.layout("Big.Horizontal.TScale", [
+            ("Horizontal.Scale.trough", {
+                "sticky": "we",
+                "children": [
+                    ("Horizontal.Scale.slider", {"side": "left", "sticky": ""})
+                ]
+            })
+        ])
 
+        style.configure("Big.Horizontal.TScale",
+                background="#e2e0e0",     # visible rail color
+                troughrelief="flat")
+
+        # Make the slider knob larger
+        style.configure("Horizontal.Scale.slider",
+                sliderlength=40,   # how long the knob is
+                thickness=40,      # how tall the knob is
+                background="#ffffff",
+                sliderrelief="raised")
+        
         if self._is_touchscreen_mode():
             style.configure("TButton", padding=(4, 1))
             style.configure("Compact.TButton", padding=(4, 1))
-            style.configure("Preset.TButton", padding=(4, 1), font=("Segoe UI", 8))
+            style.configure("Preset.TButton", padding=(10, 8), font=("Segoe UI", 12))
         else:
             style.configure("TButton", padding=(8, 5))
             style.configure("Compact.TButton", padding=(6, 4))
@@ -420,10 +493,10 @@ class DSPGui(tk.Tk):
         main_container.pack(fill="both", expand=True, padx=5, pady=5)
 
         # Configure grid
-        main_container.columnconfigure(0, weight=1, minsize=300)
-        main_container.columnconfigure(1, weight=1)
-        main_container.rowconfigure(0, weight=1, minsize=200)
-        main_container.rowconfigure(1, weight=0, minsize=200)
+        main_container.columnconfigure(0, weight=1)
+        main_container.columnconfigure(1, weight=4)
+        main_container.rowconfigure(0, weight=1)
+        main_container.rowconfigure(1, weight=0)
 
         # Frames
         presets_frame = ttk.Frame(main_container)
@@ -439,9 +512,6 @@ class DSPGui(tk.Tk):
       
         
 
-        # ---------------- PRESETS SECTION (top-left) ----------------
-        #presets_label = ttk.Label(presets_frame, text="PRESETS", style="Big.TLabel")
-        #presets_label.pack(anchor="w", pady=(0, 8))
 
         presets_list_frame = ttk.Frame(presets_frame)
         presets_list_frame.pack(fill="x", pady=(0,8))
@@ -481,11 +551,6 @@ class DSPGui(tk.Tk):
                                  command=lambda n=name: self._save_preset(n))
             save_btn.pack(side="left", padx=(0, 5))
             
-            # Edit button
-            edit_btn = ttk.Button(button_frame, text="Edit", style=button_style,
-                                 width=5 if self._is_touchscreen_mode() else 6,
-                                 command=lambda n=name: self._edit_preset(n))
-            edit_btn.pack(side="left")
             
             # Store in preset_slots dictionary
             self.preset_slots[name] = {
@@ -493,7 +558,6 @@ class DSPGui(tk.Tk):
                 "name_label": name_label,
                 "load_btn": load_btn,
                 "save_btn": save_btn,
-                "edit_btn": edit_btn
             }
 
         # Add Level + DSP/BYPASS controls inside the presets area
@@ -518,9 +582,6 @@ class DSPGui(tk.Tk):
         self.dsp_label = ttk.Label(toggle_row, text="DSP", style="Big.TLabel")
         self.dsp_label.pack(side="left", padx=(12, 0))
 
-        # Quit button at bottom of presets frame - make sure it's visible
-        quit_btn = ttk.Button(presets_frame, text="Quit", style="TButton", command=self._quit_app)
-        quit_btn.pack(side="bottom", pady=(4, 1), fill="x")
 
         # ---------------- Frequency response plot (top-right) ----------------
         plot_container = ttk.Frame(graph_frame)
@@ -536,18 +597,20 @@ class DSPGui(tk.Tk):
 
         # CF row with enhanced slider (bottom_frame)
         cf_frame = ttk.Frame(bottom_frame)
-        cf_frame.pack(fill="x", pady=(8, 2))
+        cf_frame.pack(fill="x", pady=10, expand=True)
         self.cf_slider = ValueSlider(cf_frame, "Center Frequency", 200, 3500, 
                                     "Hz")
+        self.cf_slider.scale.configure(style="Large.Horizontal.TScale")
         self.cf_slider.dynamic_step_callback = lambda v: 25 if v < 2000 else 50
         self.cf_slider.pack(fill="x")
         self.cf_var = self.cf_slider.var
 
         # Bandwidth row with enhanced slider
         bw_frame = ttk.Frame(bottom_frame)
-        bw_frame.pack(fill="x", pady=(8, 2))
+        bw_frame.pack(fill="x", pady=10, expand=True)
         self.bw_slider = ValueSlider(bw_frame, "Bandwidth", 200, 3500, 
                                     "Hz")
+        self.bw_slider.scale.configure(style="Large.Horizontal.TScale")
         def bw_step(v):
             if v < 400:
                 return 20
@@ -562,32 +625,24 @@ class DSPGui(tk.Tk):
 
         # Volume row + Mute
         vol_frame = ttk.Frame(bottom_frame)
-        vol_frame.pack(fill="x", pady=(8, 2))
+        vol_frame.pack(fill="x", pady=10, expand=True)
         self.vol_slider = ValueSlider(vol_frame, "Volume", 0, 100, 
                                      "%",unit="%", is_percent=True)
+        self.vol_slider.scale.configure(style="Large.Horizontal.TScale")
         self.vol_slider.pack(fill="x")
         self.vol_var = self.vol_slider.var
 
-        self._pre_mute_volume = 50
-        self._is_muted = False
 
         top_row = self.vol_slider.value_display.master  # This is the top_row frame inside ValueSlider
-        mute_btn = ttk.Button(top_row, text="Mute", 
-                            style="Mute.TButton", width=6, command=self._toggle_mute)
-        self.mute_btn = mute_btn
-
-        self.vol_slider.value_display.pack_forget()
-        self.vol_slider.value_display.pack(side="right")  # Then volume display
-        mute_btn.pack(side="right", padx=(0, 5))  
         # Update on slider release instead of continuously
         self.cf_slider.scale.bind("<ButtonRelease-1>", lambda e: self._apply_cf(self.cf_var.get()) or self._schedule_plot())
         self.bw_slider.scale.bind("<ButtonRelease-1>", lambda e: self._apply_bw(self.bw_var.get()) or self._schedule_plot())
-        self.vol_slider.scale.bind("<ButtonRelease-1>", lambda e: self._apply_vol(int(round((self.vol_var.get() / 100.0)*255))))
+        self.vol_slider.scale.bind("<ButtonRelease-1>", lambda e: self._apply_vol(255 - int(round((self.vol_var.get() / 100.0) * 255))))
 
         #Update when using arrows to move slider.
         self.cf_slider.on_release = lambda: (self._apply_cf(self.cf_var.get()), self._schedule_plot())
         self.bw_slider.on_release = lambda: (self._apply_bw(self.bw_var.get()), self._schedule_plot())  
-        self.vol_slider.on_release = lambda: (self._apply_vol(int(round((self.vol_var.get() / 100.0)*255))))
+        self.vol_slider.on_release = lambda: (self._apply_vol(255 -int(round((self.vol_var.get() / 100.0)*255))))
 
         # Defaults
         self.cf_var.set(1500)
@@ -636,7 +691,7 @@ class DSPGui(tk.Tk):
         current_bw = self.bw_var.get()
         current_vol = self.vol_var.get()
         
-        self.preset_manager.save_current_settings(name, current_cf, current_bw, current_vol)
+        self.preset_manager.save_current_settings(name, current_cf, current_bw)
         
         # Provide visual feedback
         original_text = self.preset_slots[name]["name_label"].cget("text")
@@ -649,65 +704,13 @@ class DSPGui(tk.Tk):
         if preset:
             self.cf_slider.set(preset["cf"])
             self.bw_slider.set(preset["bw"])
-            self.vol_slider.set(preset["vol"])
             self._apply_cf(preset["cf"])
             self._apply_bw(preset["bw"])
-            self._apply_vol(int(round((preset["vol"] / 100.0)*255)))
             self._schedule_plot()
 
-    def _edit_preset(self, name):
-        """Quick edit for a single preset"""
-        preset = self.preset_manager.get_preset(name)
-        if preset:
-            self._show_single_preset_editor(name, preset["cf"], preset["bw"]) 
 
-    def _show_single_preset_editor(self, name, current_cf, current_bw):
-        """Popup to edit a single preset including name"""
-        editor = tk.Toplevel(self)
-        editor.title(f"Edit {name}")
-        editor.geometry("300x250")  # Slightly taller for name field
-        editor.transient(self)
-        editor.grab_set()
-        
-        ttk.Label(editor, text=f"Editing Preset", style="Big.TLabel").pack(pady=10)
-        
-        # Name input
-        name_frame = ttk.Frame(editor)
-        name_frame.pack(fill="x", pady=5, padx=20)
-        ttk.Label(name_frame, text="Preset Name:").pack(side="left")
-        name_var = tk.StringVar(value=name)
-        name_entry = ttk.Entry(name_frame, textvariable=name_var, width=12)
-        name_entry.pack(side="right")
-        # CF input
-        cf_frame = ttk.Frame(editor)
-        cf_frame.pack(fill="x", pady=5, padx=20)
-        ttk.Label(cf_frame, text="Center Freq (Hz):").pack(side="left")
-        cf_var = tk.IntVar(value=current_cf)
-        cf_entry = ttk.Entry(cf_frame, textvariable=cf_var, width=8)
-        cf_entry.pack(side="right")
-        
-        # BW input
-        bw_frame = ttk.Frame(editor)
-        bw_frame.pack(fill="x", pady=5, padx=20)
-        ttk.Label(bw_frame, text="Bandwidth (Hz):").pack(side="left")
-        bw_var = tk.IntVar(value=current_bw)
-        bw_entry = ttk.Entry(bw_frame, textvariable=bw_var, width=8)
-        bw_entry.pack(side="right")
-        
-        def save_and_close():
-            new_name = name_var.get()
-            # If name changed, update the preset structure
-            if new_name != name:
-                # Remove old preset and create new one
-                self.preset_manager.presets[new_name] = self.preset_manager.presets.pop(name)
-                # Update the UI slot if needed
-                self._update_preset_slot_name(name, new_name)
-            
-            # Update values
-            self.preset_manager.presets[new_name] = {"cf": cf_var.get(), "bw": bw_var.get(), "vol": 60}
-            editor.destroy()
-        
-        ttk.Button(editor, text="Save", command=save_and_close).pack(pady=10)
+    
+       
 
     def _update_preset_slot_name(self, old_name, new_name):
         """Update the preset slot display when a preset name changes"""
@@ -717,77 +720,9 @@ class DSPGui(tk.Tk):
             # Update the command references
             slot["load_btn"].configure(command=lambda: self._apply_preset(new_name))
             slot["save_btn"].configure(command=lambda: self._save_preset(new_name))
-            slot["edit_btn"].configure(command=lambda: self._edit_preset(new_name))
             # Update the slots dictionary
             self.preset_slots[new_name] = self.preset_slots.pop(old_name)
 
-    def _show_preset_editor(self):
-        """Popup window to edit all presets including names"""
-        editor = tk.Toplevel(self)
-        editor.title("Edit All Presets")
-        editor.geometry("500x350")  # Slightly wider for name fields
-        
-        # Make it modal
-        editor.transient(self)
-        editor.grab_set()
-        
-        ttk.Label(editor, text="Edit All Presets", style="Big.TLabel").pack(pady=10)
-        
-        # Preset editing area
-        edit_frame = ttk.Frame(editor)
-        edit_frame.pack(fill="both", expand=True, padx=20, pady=10)
-        
-        # Headers
-        ttk.Label(edit_frame, text="Name", width=12).grid(row=0, column=0, sticky="w", pady=2)
-        ttk.Label(edit_frame, text="CF (Hz)").grid(row=0, column=1, padx=5, pady=2)
-        ttk.Label(edit_frame, text="BW (Hz)").grid(row=0, column=2, padx=5, pady=2)
-        
-        self.preset_vars = {}
-        row = 1
-        for name, values in self.preset_manager.presets.items():
-            # Name entry
-            name_var = tk.StringVar(value=name)
-            name_entry = ttk.Entry(edit_frame, textvariable=name_var, width=12)
-            name_entry.grid(row=row, column=0, padx=5, pady=2, sticky="w")
-            
-            # CF entry
-            cf_var = tk.IntVar(value=values["cf"])
-            cf_entry = ttk.Entry(edit_frame, textvariable=cf_var, width=6)
-            cf_entry.grid(row=row, column=1, padx=5, pady=2)
-            
-            # BW entry
-            bw_var = tk.IntVar(value=values["bw"])
-            bw_entry = ttk.Entry(edit_frame, textvariable=bw_var, width=6)
-            bw_entry.grid(row=row, column=2, padx=5, pady=2)
-            
-            self.preset_vars[name] = {"name": name_var, "cf": cf_var, "bw": bw_var}
-            row += 1
-        
-        def save_all():
-            new_presets = {}
-            name_changes = {}
-            
-            # Collect all changes
-            for old_name, vars in self.preset_vars.items():
-                new_name = vars["name"].get()
-                new_presets[new_name] = {
-                    "cf": vars["cf"].get(), 
-                    "bw": vars["bw"].get(),
-                    "vol": 50  # Default volume
-                }
-                if new_name != old_name:
-                    name_changes[old_name] = new_name
-            
-            # Update the preset manager
-            self.preset_manager.presets = new_presets
-            
-            # Update UI for any name changes
-            for old_name, new_name in name_changes.items():
-                self._update_preset_slot_name(old_name, new_name)
-            
-            editor.destroy()
-        
-        ttk.Button(editor, text="Save All", command=save_all).pack(pady=10)
 
     # ---------------- DSP/BYPASS State Management ----------------
     def _on_dsp_toggled(self, dsp_on: bool):
@@ -815,22 +750,6 @@ class DSPGui(tk.Tk):
             self.dsp_label.configure(style="Disabled.TLabel")
             self.bypass_label.configure(style="Big.TLabel")
 
-    def _toggle_mute(self):
-        "Toggle mute - save current volume and set to 0, or restore previous volume"
-        if self._is_muted:
-            # Unmute - restore previous volume
-            self.vol_var.set(self._pre_mute_volume)
-            self._apply_vol(int(round((self._pre_mute_volume / 100.0)*255)))
-            self.mute_btn.configure(style="Mute.TButton")
-            self._is_muted = False
-        else:
-            # Mute - save current volume and set to 0
-            self._pre_mute_volume = self.vol_var.get()
-            self.vol_var.set(0)
-            self._apply_vol(int(0))
-            self.mute_btn.configure(style="MuteActive.TButton")
-            self._is_muted = True
-        #self._schedule_plot()
 
    
     # ---------------- Apply to HW + publish ----------------
@@ -873,25 +792,49 @@ class DSPGui(tk.Tk):
 
     # ---------------- Improved Filter with Butterworth ----------------
     def _butterworth_response(self, f0, bw, order=4):
-        """Calculate Butterworth bandpass filter response"""
+        """Calculate Butterworth bandpass filter response with hard limits 200–3500 Hz."""
         try:
-            nyquist = 4000
-            low = max(20, f0 - bw/2) / nyquist
-            high = min(nyquist-1, f0 + bw/2) / nyquist
-            
-            if low >= high:
+            nyquist = 4000  # still using same DSP limit
+
+            # --- Compute raw band edges ---
+            raw_low  = f0 - bw / 2
+            raw_high = f0 + bw / 2
+
+            # --- Clamp band edges into allowed range ---
+            low_edge  = max(200, raw_low)
+            high_edge = min(3500, raw_high)
+
+            # If the band collapses or flips, return flat response
+            if low_edge >= high_edge:
                 freqs = np.linspace(self._fmin, self._fmax, 600)
                 return freqs, np.ones_like(freqs)
-                
-            b, a = scipy.signal.butter(order, [low, high], btype='band')
+
+            # --- Normalize for scipy.signal.butter ---
+            low_norm  = low_edge  / nyquist
+            high_norm = high_edge / nyquist
+
+            # Make sure they remain within (0,1)
+            low_norm  = max(low_norm,  0.0001)
+            high_norm = min(high_norm, 0.9999)
+
+            # Safety: ensure ordering
+            if low_norm >= high_norm:
+                freqs = np.linspace(self._fmin, self._fmax, 600)
+                return freqs, np.ones_like(freqs)
+
+            # --- Design butterworth bandpass ---
+            b, a = scipy.signal.butter(order, [low_norm, high_norm], btype='band')
             w, h = scipy.signal.freqz(b, a, worN=8000)
+
+            # Convert digital freq (rad/sample) back to Hz
             freqs = w * nyquist / np.pi
             mag = np.abs(h)
-            
+
             return freqs, mag
+
         except Exception:
-            # Fallback to Gaussian
             return self._gaussian_fallback(f0, bw)
+
 
     def _gaussian_fallback(self, f0, bw):
         """Fallback filter response"""
@@ -910,11 +853,11 @@ class DSPGui(tk.Tk):
         
         # Use dynamic figure size
         self._fig = Figure(figsize=self.plot_figsize, dpi=80)
-        self._fig.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.15)
+        self._fig.subplots_adjust(left=0.12, right=0.94, top=0.89, bottom=0.22)
         self._ax = self._fig.add_subplot(111)
         
         # Dynamic font sizing for plot
-        font_size = 9 if self._is_touchscreen_mode() else 11
+        font_size = 11
         self._ax.set_xlabel("Frequency (Hz)", fontsize=font_size)
         self._ax.set_ylabel("Gain (dB)", fontsize=font_size)
         self._ax.set_xlim(self._fmin, self._fmax)
@@ -932,8 +875,8 @@ class DSPGui(tk.Tk):
         #self.cf_text = self._ax.text(0.02, 0.98, 'CF: 750 Hz', transform=self._ax.transAxes, 
                                    # verticalalignment='top', fontsize=text_font_size, 
                                     #bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.9))
-        self.bw_text = self._ax.text(0.35, 1, 'BW: 300 Hz', transform=self._ax.transAxes,
-                                    verticalalignment='top', fontsize=text_font_size-1, 
+        self.bw_text = self._ax.text(0.3, 1.13, 'BW: 300 Hz', transform=self._ax.transAxes,
+                                    verticalalignment='top', fontsize=text_font_size+1, 
                                     bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.9))
 
         self._canvas = FigureCanvasTkAgg(self._fig, master=parent)
@@ -1042,10 +985,3 @@ class DSPGui(tk.Tk):
         if len(pts) >= 4:
             c.create_line(*pts, fill="#1f77b4", width=2, tags="curve")
 
-    # ---------------- Dev helper: quit ----------------
-    def _quit_app(self):
-        """Close the GUI window (useful during development)."""
-        try:
-            self.destroy()
-        except Exception:
-            pass
