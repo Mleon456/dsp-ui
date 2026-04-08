@@ -15,6 +15,7 @@ class RPiHW(HardwareController):
     LED_CF = 24     # to RA7 (centre freq LED output) — input
     LED_OVER = 23   # overdrive LED
     BYPASS = 26     # GPIO for bypass switch
+    RESET = 19
 
     # Gray code sequence for one detent step (CW)
     GRAY_SEQ = [
@@ -42,6 +43,9 @@ class RPiHW(HardwareController):
         # Bypass pin
         GPIO.setup(self.BYPASS, GPIO.OUT, initial=GPIO.LOW)
         self.bypass_state = False
+
+        # Reset pin / hardware enable
+        GPIO.setup(self.RESET, GPIO.OUT, initial=GPIO.HIGH)
 
         # SPI (MCP41010 digital potentiometer)
         self.spi = spidev.SpiDev()
@@ -101,7 +105,12 @@ class RPiHW(HardwareController):
         """Public setter for volume."""
         self.set_wiper(value)
 
-    
+    def toggle_reset(self, duration_s: float = 2.0) -> None:
+        
+        GPIO.output(self.RESET, GPIO.LOW)
+        time.sleep(duration_s)
+        GPIO.output(self.RESET, GPIO.HIGH)
+
     def toggle_mode(self):
 
         # Press button (active low)
@@ -178,7 +187,7 @@ class RPiHW(HardwareController):
 
         while not getattr(self, "_stop_meter", False):
             try:
-                # Read GPIO 23
+                
                 raw = GPIO.input(LED_PIN)
 
                 # Convert to level percentage

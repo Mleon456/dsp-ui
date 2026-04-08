@@ -38,6 +38,10 @@ from eventbus import EventBus
 from hardware.base import HardwareController
 from .widgets.toggle_switch import ToggleSwitch
 
+DEFAULT_CENTER_FREQUENCY = 1500
+DEFAULT_BANDWIDTH = 2400
+HARDWARE_COMMAND_DELAY_MS = 1000
+
 
 # --- Simple red LED widget (with continuous flashing capability) ---
 class Led(tk.Canvas):
@@ -380,11 +384,11 @@ class DSPGui(tk.Tk):
         # ---------------- Styling ----------------
         self.configure(padx=10, pady=10)
         style = ttk.Style(self)
-        #try:
-        #    style.theme_use("vista" if sys.platform.startswith("win") else "clam")
-        #except Exception:
-        #    pass
-        style.theme_use("clam")
+        try:
+            style.theme_use("vista" if sys.platform.startswith("win") else "clam")
+        except Exception:
+            pass
+        #style.theme_use("clam")
         # ---- Large slider knob for Linux / RPi ----
         knob_color = "#4aa3ff"   # ← change this to any color you want
         big_knob = tk.PhotoImage(width=40, height=40)
@@ -582,6 +586,31 @@ class DSPGui(tk.Tk):
         self.dsp_label = ttk.Label(toggle_row, text="DSP", style="Big.TLabel")
         self.dsp_label.pack(side="left", padx=(12, 0))
 
+        # ---------------- Reset Button / Quit Button ----------------
+        button_row = ttk.Frame(presets_frame)
+        button_row.pack(fill="x", pady=(10,0))
+
+        # Make two equal columns
+        button_row.columnconfigure(0, weight=1)
+        button_row.columnconfigure(1, weight=1)
+
+        btn_style = "Preset.TButton" if self._is_touchscreen_mode() else "TButton"
+
+        reset_btn = ttk.Button(
+            button_row,
+            text="Reset",
+            style=btn_style,
+            command=self._on_reset
+        )
+        reset_btn.grid(row=0, column=0, sticky="ew", padx=(0,3))
+
+        quit_btn = ttk.Button(
+            button_row,
+            text="Quit",
+            style=btn_style,
+            command=self._on_quit
+        )
+        quit_btn.grid(row=0, column=1, sticky="ew", padx=(3,0))
 
         # ---------------- Frequency response plot (top-right) ----------------
         plot_container = ttk.Frame(graph_frame)
@@ -623,7 +652,7 @@ class DSPGui(tk.Tk):
         self.bw_slider.pack(fill="x")
         self.bw_var = self.bw_slider.var
 
-        # Volume row + Mute
+        # Volume row
         vol_frame = ttk.Frame(bottom_frame)
         vol_frame.pack(fill="x", pady=10, expand=True)
         self.vol_slider = ValueSlider(vol_frame, "Volume", 0, 100, 
@@ -633,7 +662,8 @@ class DSPGui(tk.Tk):
         self.vol_var = self.vol_slider.var
 
 
-        top_row = self.vol_slider.value_display.master  # This is the top_row frame inside ValueSlider
+        top_row = self.vol_slider.value_display.master
+
         # Update on slider release instead of continuously
         self.cf_slider.scale.bind("<ButtonRelease-1>", lambda e: self._apply_cf(self.cf_var.get()) or self._schedule_plot())
         self.bw_slider.scale.bind("<ButtonRelease-1>", lambda e: self._apply_bw(self.bw_var.get()) or self._schedule_plot())
@@ -645,8 +675,8 @@ class DSPGui(tk.Tk):
         self.vol_slider.on_release = lambda: (self._apply_vol(255 -int(round((self.vol_var.get() / 100.0)*255))))
 
         # Defaults
-        self.cf_var.set(1500)
-        self.bw_var.set(2400)
+        self.cf_var.set(DEFAULT_CENTER_FREQUENCY)
+        self.bw_var.set(DEFAULT_BANDWIDTH)
         self.vol_var.set(50)
 
         # Initial state update for DSP/BYPASS
@@ -683,6 +713,21 @@ class DSPGui(tk.Tk):
         else:
             self.destroy()
 
+    def _on_reset(self):
+        """Reset center frequency/bandwidth to defaults and pulse hardware reset."""
+        self.cf_slider.set(DEFAULT_CENTER_FREQUENCY)
+        self.bw_slider.set(DEFAULT_BANDWIDTH)
+        try:
+            reset_fn = getattr(self.hw, "toggle_reset", None)
+            if callable(reset_fn):
+                reset_fn()
+        except Exception:
+            pass
+        self._schedule_plot()
+
+    def _on_quit(self):
+        """Close the application."""
+        self.destroy()
     # ------------- Enhanced Preset System with Save Functionality -------------
     def _save_preset(self, name):
         """Save current GUI settings to a preset"""
@@ -704,9 +749,7 @@ class DSPGui(tk.Tk):
         if preset:
             self.cf_slider.set(preset["cf"])
             self.bw_slider.set(preset["bw"])
-            self._apply_cf(preset["cf"])
-            self._apply_bw(preset["bw"])
-            self._schedule_plot()
+            self._apply_cf_then_bw(preset["cf"], preset["bw"])
 
 
     
@@ -765,6 +808,10 @@ class DSPGui(tk.Tk):
         try: self.bus.publish("bandwidth_hz", hz)
         except Exception: pass
         
+    def _apply_cf_then_bw(self, cf: int, bw: int, delay_ms: int = HARDWARE_COMMAND_DELAY_MS):
+        """Apply CF first, wait for hardware to settle, then apply BW."""
+        self._apply_cf(cf)
+        self.after(delay_ms, lambda: (self._apply_bw(bw), self._schedule_plot()))
 
     def _apply_vol(self, pct: int):
         try: self.hw.set_volume(pct)
@@ -788,10 +835,11 @@ class DSPGui(tk.Tk):
 
     def _on_level_update(self, level_pct: float):
         overload = level_pct >= 0.90
-        self.set_overload(overload)
+        # Dispatch GUI updates to the main Tk thread to avoid stale widget state.
+        self.after(0, lambda: self.set_overload(overload))
 
     # ---------------- Improved Filter with Butterworth ----------------
-    def _butterworth_response(self, f0, bw, order=4):
+    def _butterworth_response(self, f0, bw, order=8):
         """Calculate Butterworth bandpass filter response with hard limits 200–3500 Hz."""
         try:
             nyquist = 4000  # still using same DSP limit

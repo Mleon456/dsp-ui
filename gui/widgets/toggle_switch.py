@@ -5,7 +5,8 @@ class ToggleSwitch(ttk.Frame):
     def __init__(self, master=None, width=64, height=32, value=None, command=None, **kw):
         super().__init__(master, **kw)
         self.width, self.height = width, height
-        self.radius, self.pad = height // 2, 2
+        self.pad = 2
+        self.radius = (height - 2*self.pad) // 2
         self.value = value or tk.BooleanVar(value=True)
         self.command = command
         self.on_toggle = None  # ← Add this attribute
