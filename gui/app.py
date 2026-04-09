@@ -40,7 +40,7 @@ from .widgets.toggle_switch import ToggleSwitch
 
 DEFAULT_CENTER_FREQUENCY = 1500
 DEFAULT_BANDWIDTH = 2400
-HARDWARE_COMMAND_DELAY_MS = 1000
+HARDWARE_COMMAND_DELAY_MS = 2000
 
 
 # --- Simple red LED widget (with continuous flashing capability) ---
@@ -474,7 +474,7 @@ class DSPGui(tk.Tk):
         if self._is_touchscreen_mode():
             style.configure("TButton", padding=(4, 1))
             style.configure("Compact.TButton", padding=(4, 1))
-            style.configure("Preset.TButton", padding=(10, 8), font=("Segoe UI", 12))
+            style.configure("Preset.TButton", padding=(8, 6), font=("Segoe UI", 11))
         else:
             style.configure("TButton", padding=(8, 5))
             style.configure("Compact.TButton", padding=(6, 4))
@@ -497,8 +497,8 @@ class DSPGui(tk.Tk):
         main_container.pack(fill="both", expand=True, padx=5, pady=5)
 
         # Configure grid
-        main_container.columnconfigure(0, weight=1)
-        main_container.columnconfigure(1, weight=4)
+        main_container.columnconfigure(0, weight=2)
+        main_container.columnconfigure(1, weight=3)
         main_container.rowconfigure(0, weight=1)
         main_container.rowconfigure(1, weight=0)
 
@@ -510,15 +510,15 @@ class DSPGui(tk.Tk):
         presets_frame.grid(row=0, column=0, sticky="nsew", padx=(0,5), pady=(0,5))
         graph_frame.grid(row=0, column=1, sticky="nsew", padx=(5,0), pady=(0,5))
         bottom_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(5,0))
-        presets_frame.configure(padding=(5, 5, 5, 5))
+        presets_frame.configure(padding=(4, 4, 4, 4))
         graph_frame.configure(padding=(5, 5, 5, 5))
-        bottom_frame.configure(padding=(5, 5, 5, 10))
+        bottom_frame.configure(padding=(5, 2, 5, 5))
       
         
 
 
         presets_list_frame = ttk.Frame(presets_frame)
-        presets_list_frame.pack(fill="x", pady=(0,8))
+        presets_list_frame.pack(fill="x", pady=(0,6))
 
         # Initialize preset_slots BEFORE using it
         self.preset_slots = {}
@@ -531,7 +531,7 @@ class DSPGui(tk.Tk):
 
         for name in preset_names:
             slot_frame = ttk.Frame(presets_list_frame)
-            slot_frame.pack(fill="x", pady=1)  # Reduced padding
+            slot_frame.pack(fill="x", pady=0.5)  # Reduced padding
             
             # Preset name label - fixed width for alignment
             name_label = ttk.Label(slot_frame, text=name, style="Compact.TLabel", 
@@ -588,7 +588,7 @@ class DSPGui(tk.Tk):
 
         # ---------------- Reset Button / Quit Button ----------------
         button_row = ttk.Frame(presets_frame)
-        button_row.pack(fill="x", pady=(10,0))
+        button_row.pack(fill="x", pady=(6,0))
 
         # Make two equal columns
         button_row.columnconfigure(0, weight=1)
@@ -626,7 +626,7 @@ class DSPGui(tk.Tk):
 
         # CF row with enhanced slider (bottom_frame)
         cf_frame = ttk.Frame(bottom_frame)
-        cf_frame.pack(fill="x", pady=10, expand=True)
+        cf_frame.pack(fill="x", pady=5, expand=True)
         self.cf_slider = ValueSlider(cf_frame, "Center Frequency", 200, 3500, 
                                     "Hz")
         self.cf_slider.scale.configure(style="Large.Horizontal.TScale")
@@ -636,7 +636,7 @@ class DSPGui(tk.Tk):
 
         # Bandwidth row with enhanced slider
         bw_frame = ttk.Frame(bottom_frame)
-        bw_frame.pack(fill="x", pady=10, expand=True)
+        bw_frame.pack(fill="x", pady=5, expand=True)
         self.bw_slider = ValueSlider(bw_frame, "Bandwidth", 200, 3500, 
                                     "Hz")
         self.bw_slider.scale.configure(style="Large.Horizontal.TScale")
@@ -714,7 +714,7 @@ class DSPGui(tk.Tk):
             self.destroy()
 
     def _on_reset(self):
-        """Reset center frequency/bandwidth to defaults and pulse hardware reset."""
+        """Reset center frequency and bandwidth to their defaults."""
         self.cf_slider.set(DEFAULT_CENTER_FREQUENCY)
         self.bw_slider.set(DEFAULT_BANDWIDTH)
         try:
