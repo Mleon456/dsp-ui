@@ -474,11 +474,11 @@ class DSPGui(tk.Tk):
         if self._is_touchscreen_mode():
             style.configure("TButton", padding=(4, 1))
             style.configure("Compact.TButton", padding=(4, 1))
-            style.configure("Preset.TButton", padding=(8, 6), font=("Segoe UI", 11))
+            style.configure("Preset.TButton", padding=(6, 4), font=("Segoe UI", 10))
         else:
             style.configure("TButton", padding=(8, 5))
             style.configure("Compact.TButton", padding=(6, 4))
-            style.configure("Preset.TButton", padding=(5, 3), font=("Segoe UI", 9))
+            style.configure("Preset.TButton", padding=(4, 2), font=("Segoe UI", 8))
 
         # ---------------- Debounce handles ----------------
         self._cf_after_id: Optional[str] = None
@@ -626,7 +626,7 @@ class DSPGui(tk.Tk):
 
         # CF row with enhanced slider (bottom_frame)
         cf_frame = ttk.Frame(bottom_frame)
-        cf_frame.pack(fill="x", pady=3, expand=True)
+        cf_frame.pack(fill="x", pady=5, expand=True)
         self.cf_slider = ValueSlider(cf_frame, "Center Frequency", 200, 3500, 
                                     "Hz")
         self.cf_slider.scale.configure(style="Large.Horizontal.TScale")
@@ -636,7 +636,7 @@ class DSPGui(tk.Tk):
 
         # Bandwidth row with enhanced slider
         bw_frame = ttk.Frame(bottom_frame)
-        bw_frame.pack(fill="x", pady=3, expand=True)
+        bw_frame.pack(fill="x", pady=5, expand=True)
         self.bw_slider = ValueSlider(bw_frame, "Bandwidth", 200, 3500, 
                                     "Hz")
         self.bw_slider.scale.configure(style="Large.Horizontal.TScale")
@@ -654,7 +654,7 @@ class DSPGui(tk.Tk):
 
         # Volume row
         vol_frame = ttk.Frame(bottom_frame)
-        vol_frame.pack(fill="x", pady=6, expand=True)
+        vol_frame.pack(fill="x", pady=10, expand=True)
         self.vol_slider = ValueSlider(vol_frame, "Volume", 0, 100, 
                                      "%",unit="%", is_percent=True)
         self.vol_slider.scale.configure(style="Large.Horizontal.TScale")
