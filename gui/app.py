@@ -518,7 +518,7 @@ class DSPGui(tk.Tk):
 
 
         presets_list_frame = ttk.Frame(presets_frame)
-        presets_list_frame.pack(fill="x", pady=(0,6))
+        presets_list_frame.pack(fill="x", pady=(0,4))
 
         # Initialize preset_slots BEFORE using it
         self.preset_slots = {}
@@ -566,7 +566,7 @@ class DSPGui(tk.Tk):
 
         # Add Level + DSP/BYPASS controls inside the presets area
         toggle_row = ttk.Frame(presets_frame)
-        toggle_row.pack(fill="x", pady=10)
+        toggle_row.pack(fill="x", pady=6)
 
         ttk.Label(toggle_row, text="Level", style="Big.TLabel").pack(side="left")
         self.level_led = Led(toggle_row, size=16)
@@ -588,7 +588,7 @@ class DSPGui(tk.Tk):
 
         # ---------------- Reset Button / Quit Button ----------------
         button_row = ttk.Frame(presets_frame)
-        button_row.pack(fill="x", pady=(6,0))
+        button_row.pack(fill="x", pady=(4,0))
 
         # Make two equal columns
         button_row.columnconfigure(0, weight=1)
@@ -626,7 +626,7 @@ class DSPGui(tk.Tk):
 
         # CF row with enhanced slider (bottom_frame)
         cf_frame = ttk.Frame(bottom_frame)
-        cf_frame.pack(fill="x", pady=5, expand=True)
+        cf_frame.pack(fill="x", pady=3, expand=True)
         self.cf_slider = ValueSlider(cf_frame, "Center Frequency", 200, 3500, 
                                     "Hz")
         self.cf_slider.scale.configure(style="Large.Horizontal.TScale")
@@ -636,7 +636,7 @@ class DSPGui(tk.Tk):
 
         # Bandwidth row with enhanced slider
         bw_frame = ttk.Frame(bottom_frame)
-        bw_frame.pack(fill="x", pady=5, expand=True)
+        bw_frame.pack(fill="x", pady=3, expand=True)
         self.bw_slider = ValueSlider(bw_frame, "Bandwidth", 200, 3500, 
                                     "Hz")
         self.bw_slider.scale.configure(style="Large.Horizontal.TScale")
@@ -654,7 +654,7 @@ class DSPGui(tk.Tk):
 
         # Volume row
         vol_frame = ttk.Frame(bottom_frame)
-        vol_frame.pack(fill="x", pady=10, expand=True)
+        vol_frame.pack(fill="x", pady=6, expand=True)
         self.vol_slider = ValueSlider(vol_frame, "Volume", 0, 100, 
                                      "%",unit="%", is_percent=True)
         self.vol_slider.scale.configure(style="Large.Horizontal.TScale")

@@ -82,16 +82,17 @@ class RPiHW(HardwareController):
             time.sleep(0.01)
 
 
-    # Called when user flips the DSP toggle
+    
     def set_bypass(self, on: bool) -> None:
         self.bypass_state = on
         GPIO.output(self.BYPASS, GPIO.HIGH if on else GPIO.LOW)
         print(f"Bypass {'Disabled' if on else 'Enabled'}.")
         pass
+
     def toggle_bypass(self):
         self.set_bypass(not self.bypass_state)
-    # Called when the Volume slider is adjusted. 
-    # Could map 0-100% to a DAC (0-3.3 V)
+
+    #volume Wiper control via MCP41010
     def set_wiper(self, value):
         """Low-level MCP41010 write (0–255)."""
         value = max(0, min(255, value))
@@ -105,7 +106,7 @@ class RPiHW(HardwareController):
         """Public setter for volume."""
         self.set_wiper(value)
 
-    def toggle_reset(self, duration_s: float = 2.0) -> None:
+    def toggle_reset(self, duration_s: float = 1.0) -> None:
         
         GPIO.output(self.RESET, GPIO.LOW)
         time.sleep(duration_s)
