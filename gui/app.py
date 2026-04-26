@@ -40,7 +40,7 @@ from .widgets.toggle_switch import ToggleSwitch
 
 DEFAULT_CENTER_FREQUENCY = 1500
 DEFAULT_BANDWIDTH = 2400
-HARDWARE_COMMAND_DELAY_MS = 2000
+HARDWARE_COMMAND_DELAY_MS = 1000
 
 
 # --- Simple red LED widget (with continuous flashing capability) ---
@@ -749,7 +749,14 @@ class DSPGui(tk.Tk):
         if preset:
             self.cf_slider.set(preset["cf"])
             self.bw_slider.set(preset["bw"])
-            self._apply_cf_then_bw(preset["cf"], preset["bw"])
+            
+            # Apply CF first, then BW after hardware settles
+            # This ensures sequential hardware updates as required
+            self._apply_cf(preset["cf"])
+            self.after(HARDWARE_COMMAND_DELAY_MS, lambda: (
+                self._apply_bw(preset["bw"]),
+                self._schedule_plot()
+            ))
 
 
     

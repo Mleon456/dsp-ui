@@ -109,6 +109,7 @@ class RPiHW(HardwareController):
     def toggle_reset(self, duration_s: float = 1.0) -> None:
         
         GPIO.output(self.RESET, GPIO.LOW)
+        self.mode = "centre"
         self.center_freq = 1500
         self.bandwidth = 2400
         time.sleep(duration_s)
